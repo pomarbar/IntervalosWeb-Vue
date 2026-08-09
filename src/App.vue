@@ -15,7 +15,7 @@
       <div class="selector-grid">
         <!-- Fila J -->
         <div class="fila-intervalos">
-          <button class="categ" :class="{ active: estaCategoriaActiva('J') }" @click="toggleCategoria('J')">J</button>
+          <button class="categ" :class="{ active: estaCategoriaActiva('J') }" @click="handleCategoriaClick('J')">J</button>
           <div class="botones-fila">
             <template v-for="item in getIntervalosAgrupadosPorCategoria('J')" :key="item.tipo === 'single' ? item.data.id : item.idGrupo">
               <button v-if="item.tipo === 'single'" class="intervalo-btn" :class="{ active: seleccionados.includes(item.data.id) }" @click="toggleIntervalo(item.data)">{{ item.data.nombreCorto }}</button>
@@ -31,7 +31,7 @@
         
         <!-- Fila C -->
         <div class="fila-intervalos">
-          <button class="categ" :class="{ active: estaCategoriaActiva('C') }" @click="toggleCategoria('C')">C</button>
+          <button class="categ" :class="{ active: estaCategoriaActiva('C') }" @click="handleCategoriaClick('C')">C</button>
           <div class="botones-fila">
             <template v-for="item in getIntervalosAgrupadosPorCategoria('C')" :key="item.tipo === 'single' ? item.data.id : item.idGrupo">
               <button v-if="item.tipo === 'single'" class="intervalo-btn" :class="{ active: seleccionados.includes(item.data.id) }" @click="toggleIntervalo(item.data)">{{ item.data.nombreCorto }}</button>
@@ -47,7 +47,7 @@
 
         <!-- Fila D -->
         <div class="fila-intervalos">
-          <button class="categ" :class="{ active: estaCategoriaActiva('D') }" @click="toggleCategoria('D')">D</button>
+          <button class="categ" :class="{ active: estaCategoriaActiva('D') }" @click="handleCategoriaClick('D')">D</button>
           <div class="botones-fila">
             <template v-for="item in getIntervalosAgrupadosPorCategoria('D')" :key="item.tipo === 'single' ? item.data.id : item.idGrupo">
               <button v-if="item.tipo === 'single'" class="intervalo-btn" :class="{ active: seleccionados.includes(item.data.id) }" @click="toggleIntervalo(item.data)">{{ item.data.nombreCorto }}</button>
@@ -63,15 +63,24 @@
       </div>
 
       <!-- Respuesta y Checkmark -->
-      <div id="respuesta">{{ respuestaTexto }}</div>
-      <img id="checkmark" v-if="mostrarCheck" :src="checkmarkImg" :style="{ transform: checkmarkScale }" class="fade-in" />
-
+      <div id="respuesta">
+        <span id="respuesta-texto">{{ respuestaTexto }}</span>
+        <img v-if="mostrarCheck" id="checkmark" :src="checkmarkImg" :style="{ transform: checkmarkScale }" class="fade-in" />
+      </div>
       <!-- Panel Derecho (Controles) -->
       <div id="panelDerecho">
         <p id="textoI" v-if="mostrarTextoI" class="fade-in">No hay intervalos seleccionados. Por favor, antes de entrar seleccione los intervalos que desea trabajar.</p>
         
-        <img v-if="estado === 'tocar' && modo" class="control" id="play" src="/grafs/play.png" @mousedown="jugar" @mouseup="respuestaTexto = '¿Cuál intervalo sonó?'" />
-        <img v-if="estado === 'tocar' && modo" class="control" id="stop" src="/grafs/stop.png" @mousedown="detenerAudio" />
+       <button v-if="estado === 'tocar' && modo" id="play-stop-btn" @click="togglePlayStop" @mouseup="respuestaTexto = '¿Cuál intervalo sonó?'">
+        <!-- Ícono SVG de Play (triángulo) -->
+        <svg v-if="!isPlaying" width="32" height="32" viewBox="0 0 24 24" fill="white">
+          <path d="M8 5v14l11-7z"/>
+        </svg>
+        <!-- Ícono SVG de Stop (cuadrado) -->
+        <svg v-else width="32" height="32" viewBox="0 0 24 24" fill="white">
+          <path d="M6 6h12v12H6z"/>
+        </svg>
+      </button>
         
         <button id="entrar" @click="alternarEstado">
           {{ estado === 'selector' ? 'ENTRAR' : 'SELECCIONAR' }}
@@ -86,8 +95,6 @@
 
     <div id="reloj">{{ reloj }}</div>
     
-    <!-- Audio oculto -->
-    <audio ref="audioElement" id="fileInterv"></audio>
   </div>
 </template>
 
@@ -111,6 +118,93 @@ const intervalos = [
   { id: 'septma', nombre: 'Séptima mayor', nombreCorto: '7M', cat: 'D', grupo: '7', semitonos: 11, archivos: ['7ma1.mp3', '7ma2.mp3', '7ma3.mp3', '7ma4.mp3', '7ma5.mp3', '7ma6.mp3', '7ma7.mp3', '7ma8.mp3', '7ma9.mp3', '7ma10.mp3', '7ma11.mp3', '7ma12.mp3', '7ma13.mp3'] }
 ]
 
+// ==================== MOTOR TEÓRICO Y DE AUDIO ====================
+
+const estructurasEscalas = {
+  'mayor': [0, 2, 4, 5, 7, 9, 11],
+  'menor armónica': [0, 2, 3, 5, 7, 8, 11],
+}
+
+const diccionarioTonos = {
+  'Mayores': [
+    { id: 1, nombre: 'Do' }, { id: 2, nombre: 'Sol' }, { id: 3, nombre: 'Re' },
+    { id: 4, nombre: 'La' }, { id: 5, nombre: 'Mi' }, { id: 6, nombre: 'Si/Dob' },
+    { id: 7, nombre: 'Fa#/Solb' }, { id: 8, nombre: 'Do#/Reb' }, { id: 9, nombre: 'Lab' },
+    { id: 10, nombre: 'Mib' }, { id: 11, nombre: 'Sib' }, { id: 12, nombre: 'Fa' }
+  ],
+  'Menores': [
+    { id: 1, nombre: 'la' }, { id: 2, nombre: 'mi' }, { id: 3, nombre: 'si' },
+    { id: 4, nombre: 'fa#' }, { id: 5, nombre: 'do#' }, { id: 6, nombre: 'sol#/lab' },
+    { id: 7, nombre: 're#/mib' }, { id: 8, nombre: 'la#/sib' }, { id: 9, nombre: 'fa' },
+    { id: 10, nombre: 'do' }, { id: 11, nombre: 'sol' }, { id: 12, nombre: 're' }
+  ]
+}
+
+const nombresDeNotas = ['FAb','DOb','SOLb','REb','LAb','MIb','SIb','FA','DO','SOL','RE','LA','MI','SI','FA#','DO#','SOL#','RE#','LA#','MI#','SI#']
+const ordenNombresNotas = [1,3,5,0,2,4,6]
+
+// Función mágica que extrae los 7 nombres correctos de una tonalidad usando tu lógica
+const getNombresEscala = (nombreTonica) => {
+  const rootIdx = nombresDeNotas.findIndex(n => n.toUpperCase() === nombreTonica.toUpperCase())
+  if (rootIdx === -1) return []
+  
+  // Como la tónica está en el índice 1 del subconjunto, el subconjunto empieza en (rootIdx - 1)
+  const startIdx = (rootIdx - 1 + 21) % 21
+  const slice7 = []
+  for(let i=0; i<7; i++) slice7.push(nombresDeNotas[(startIdx + i) % 21])
+  
+  // Reordenamos según tu matriz
+  const escalaOrdenada = []
+  ordenNombresNotas.forEach(idx => escalaOrdenada.push(slice7[idx]))
+  return escalaOrdenada
+}
+
+// --- CONFIGURACIÓN ACTUAL (Por ahora fija, luego pondremos un selector) ---
+const tonalidadActual = ref('Do')
+const tipoEscalaActual = ref('mayor')
+const midiRaiz = ref(60) // 60 = Do central (C4)
+
+// --- MOTOR WEB AUDIO API ---
+let audioCtx = null
+
+const getAudioContext = () => {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+  if (audioCtx.state === 'suspended') audioCtx.resume() // Por si el navegador lo pausó
+  return audioCtx
+}
+
+const midiToFrecuencia = (midi) => 440 * Math.pow(2, (midi - 69) / 12)
+
+const tocarIntervaloSintetizado = (semitonos) => {
+  const ctx = getAudioContext()
+  const ahora = ctx.currentTime
+  const duracion = 2.5 // Segundos que durará el sonido
+  
+  // Nota 1: La tónica (Raíz)
+  const freq1 = midiToFrecuencia(midiRaiz.value)
+  const osc1 = ctx.createOscillator()
+  const gain1 = ctx.createGain()
+  osc1.type = 'triangle' // Suena muy limpio para intervalos educativos
+  osc1.frequency.setValueAtTime(freq1, ahora)
+  gain1.gain.setValueAtTime(0.4, ahora)
+  gain1.gain.exponentialRampToValueAtTime(0.01, ahora + duracion)
+  osc1.connect(gain1).connect(ctx.destination)
+  osc1.start(ahora)
+  osc1.stop(ahora + duracion)
+
+  // Nota 2: El intervalo (Raíz + semitonos)
+  const freq2 = midiToFrecuencia(midiRaiz.value + semitonos)
+  const osc2 = ctx.createOscillator()
+  const gain2 = ctx.createGain()
+  osc2.type = 'triangle'
+  osc2.frequency.setValueAtTime(freq2, ahora)
+  gain2.gain.setValueAtTime(0.4, ahora)
+  gain2.gain.exponentialRampToValueAtTime(0.01, ahora + duracion)
+  osc2.connect(gain2).connect(ctx.destination)
+  osc2.start(ahora)
+  osc2.stop(ahora + duracion)
+}
+
 // ==================== ESTADO REACTIVO ====================
 const estado = ref('selector')
 const modo = ref('')
@@ -126,6 +220,7 @@ const datosInterv = ref({ lista: -1, item: -1, nombre: '', id: '', grupo: null }
 const matrizInterv = ref([])
 const jugando = ref(false)
 const audioElement = ref(null)
+const isPlaying = ref(false)
 let poolDeJuego = []
 let intervaloContinuum = null
 
@@ -195,6 +290,18 @@ const toggleCategoria = (cat) => {
   } else {
     gruposDeCat.forEach(g => { if (!isGenericActive(g)) seleccionados.value.push(g + '_gen') })
     singlesDeCat.forEach(s => { if (!seleccionados.value.includes(s.id)) seleccionados.value.push(s.id) })
+  }
+}
+
+const handleCategoriaClick = (cat) => {
+  if (estado.value === 'tocar' && modo.value) {
+    // Si estamos jugando, la categoría se convierte en la respuesta
+    const nombreCat = cat === 'J' ? 'Justo' : (cat === 'C' ? 'Consonante' : 'Disonante')
+    respuestaTexto.value = nombreCat
+    evaluar()
+  } else if (estado.value === 'selector') {
+    // Si estamos seleccionando, hace lo de siempre
+    toggleCategoria(cat)
   }
 }
 
@@ -289,15 +396,17 @@ const selectArchivo = () => {
   const objetoIntervalo = poolDeJuego[subIndex] 
 
   tocaIntervalo(objetoIntervalo.archivos[numItem])
-  datosInterv.value = { lista: subIndex, item: numItem, nombre: objetoIntervalo.nombre, id: objetoIntervalo.id, grupo: objetoIntervalo.grupo }
+  datosInterv.value = { lista: subIndex, item: numItem, nombre: objetoIntervalo.nombre, id: objetoIntervalo.id, grupo: objetoIntervalo.grupo, cat: objetoIntervalo.cat  }
 }
 
 const tocaIntervalo = (archivo) => {
-  if (audioElement.value) {
-    audioElement.value.pause()
-    audioElement.value.src = "audios/" + archivo
-    audioElement.value.currentTime = 0
-    audioElement.value.play()
+  // 'archivo' ya no se usa para audio, pero el sistema se lo pasa igual.
+  // Lo que necesitamos es saber CUÁNTOS semitonos tiene el intervalo que se sortea.
+  // Como reutilizamos la variable, la ignoramos y buscamos el intervalo actual:
+  
+  const intervaloActual = poolDeJuego[datosInterv.value.lista]
+  if (intervaloActual) {
+    tocarIntervaloSintetizado(intervaloActual.semitonos)
   }
 }
 
@@ -305,11 +414,24 @@ const detenerAudio = () => {
   if (audioElement.value) audioElement.value.pause()
   jugando.value = false
   if (intervaloContinuum) clearInterval(intervaloContinuum)
+  isPlaying.value = false
 }
 
 const jugar = () => {
+  isPlaying.value = true
+  mostrarCheck.value = false       // <--- AÑADE ESTO
+  respuestaTexto.value = ''        // <--- Y ESTO (para que borre el texto anterior)
+  
   if (modo.value === 'discreto') selectArchivo()
   else if (modo.value === 'continuum') { jugando.value = true; jugarContinuum() }
+}
+
+const togglePlayStop = () => {
+  if (isPlaying.value) {
+    detenerAudio()
+  } else {
+    jugar()
+  }
 }
 
 const jugarContinuum = () => {
@@ -329,13 +451,26 @@ const evaluar = () => {
   mostrarCheck.value = false 
   setTimeout(() => {
     const respuesta = respuestaTexto.value
-    const correcta = datosInterv.value.nombre
-    const grupoId = datosInterv.value.grupo
+    const correcta = datosInterv.value.nombre // "Tercera mayor"
+    const grupoId = datosInterv.value.grupo   // "3"
+    const catCorrecta = datosInterv.value.cat  // "C"
+    
     let esCorrecto = false
 
-    if (respuesta === correcta) esCorrecto = true
+    // Caso 1: Acierto exacto (ej: pulsó "3M" y era "Tercera mayor")
+    if (respuesta === correcta) {
+      esCorrecto = true
+    } 
+    // Caso 2: Acierto genérico (ej: pulsó "3" y era "Tercera mayor")
     else if (correcta.startsWith(respuesta + ' ')) {
       if (grupoId && isGenericActive(grupoId)) esCorrecto = true
+    }
+    // Caso 3: Acierto por Categoría (ej: pulsó "C" y era una Tercera)
+    else if (catCorrecta) {
+      const nombreCatCorrecta = catCorrecta === 'J' ? 'Justo' : (catCorrecta === 'C' ? 'Consonante' : 'Disonante')
+      if (respuesta === nombreCatCorrecta) {
+        esCorrecto = true
+      }
     }
 
     if (esCorrecto) { checkmarkImg.value = '/grafs/acierto.png'; checkmarkScale.value = 'scale(1.0)' }
@@ -423,7 +558,26 @@ onUnmounted(() => {
 #textoI { width: 100%; color: rgb(234,247,233); font-family: futura; margin-bottom: 10px; }
 #entrar { background-color: rgb(171,185,171); color: rgb(2,18,5); font-size:14px; font-family: futura, sans-serif; padding: 8px 15px; border-radius: 5px; border: none; cursor: pointer; font-weight: bold; }
 .control, .modo { cursor: pointer; border: none; color: white; font-family: futura; border-radius: 5px; }
-#play, #stop { height: 40px; width: 40px; background: transparent; }
+#play-stop-btn {
+  width: 45px;
+  height: 45px;
+  background: rgba(54, 247, 96, 0.3); /* Blanco muy transparente */
+  border: 1px solid rgba(255,255,255,0.3);
+  border-radius: 50%; /* Lo hace redondo */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+#play-stop-btn:hover {
+  background: rgba(115, 246, 144, 0.5); /* Se ilumina al pasar el ratón */
+  transform: scale(1.1); /* Crece un poquito */
+}
+#play-stop-btn svg {
+  margin-left: 3px; /* Ajuste visual para que el triángulo quede perfectamente centrado */
+}
 #repetir { background: rgba(255,255,255,0.2); padding: 8px; font-size: 14px; margin-left: auto; }
 .modo { flex: 1; padding: 10px; font-size: 14px; background: rgba(255,255,255,0.1); transition: all 0.2s; margin-top: 10px;}
 .modo:hover { background: rgba(255,255,255,0.3); }
@@ -431,11 +585,22 @@ onUnmounted(() => {
 
 /* --- RESPUESTA Y CHECKMARK --- */
 #respuesta {
-  width: 100%; height: 35px; background-color: rgb(50,50,50); text-align: center;
+  width: 100%; height: 35px; background-color: rgb(50,50,50); 
   color: rgb(234,247,233); font-family: futura; display: flex; align-items: center;
-  justify-content: center; border-radius: 6px; margin-top: 20px; font-size: 18px;
+  justify-content: space-between; /* Empuja el texto a la izquierda y el icono a la derecha */
+  border-radius: 6px; margin-top: 20px; font-size: 18px;
+  padding: 0 15px; /* Espacio interno para que no rocen los bordes */
+  box-sizing: border-box; 
 }
-#checkmark { position: absolute; right: 20px; top: 20px; width: 35px; height: 35px; }
+#respuesta-texto {
+  flex-grow: 1; /* El texto ocupa todo el espacio disponible */
+  text-align: center; /* Y se centra en ese espacio */
+}
+#checkmark { 
+  width: 25px; /* Un poco más pequeño para que quepa bien en la barra */
+  height: 25px; 
+  margin-left: 10px; /* Separación entre el texto y el icono */
+}
 
 /* --- RELOJ Y FONDO --- */
 #reloj { position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%); background-color: green; color: white; font-size: 16px; padding: 5px 15px; border-radius: 5px; z-index: 10;}
