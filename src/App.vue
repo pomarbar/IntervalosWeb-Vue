@@ -271,6 +271,19 @@ const toggleIntervalo = (intervalo) => {
   }
 }
 
+
+document.addEventListener('click', () => {
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+    // Reproducir un sonido corto o buffer vacío para destrabar en móviles
+    const buffer = audioCtx.createBuffer(1, 1, 22050);
+    const source = audioCtx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioCtx.destination);
+    source.start(0);
+}, { once: true });
+
 const handleGenericClick = (grupo) => {
   if (estado.value === 'tocar') {
     // Enviamos la abreviatura base del botón
