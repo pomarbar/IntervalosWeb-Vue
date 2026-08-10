@@ -384,37 +384,46 @@ const selectArchivo = () => {
 
 // ==================== MOTOR WEB AUDIO API ====================
 let audioCtx = null
-let isAudioUnlocked = false
+let masterGain = null
 
-// Esta función se ejecuta con el primer toque del usuario en todo el cuerpo de la app
-const desbloquearAudioMovil = () => {
-  if (isAudioUnlocked) return
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)()
-  
-  // Si está en estado "suspended" (bloqueado por el móvil), lo forzamos a despertar
-  if (audioCtx.state === 'suspended') {
-    audioCtx.resume().then(() => {
-      isAudioUnlocked = true
-    })
-  } else {
-    isAudioUnlocked = true
-  }
-}
-// Nuestra función original, pero ahora más limpia
 const getAudioContext = () => {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+    // Creamos un control de volumen maestro que no se destruye nunca
+    masterGain = audioCtx.createGain()
+    masterGain.gain.setValueAtTime(1.0, audioCtx.currentTime)
+    masterGain.connect(audioCtx.destination)
+  }
+  // El truco móvil: Siempre intentamos despertarlo. Es seguro llamarlo varias veces.
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume()
+  }
   return audioCtx
 }
+
 const midiToFrecuencia = (midi) => 440 * Math.pow(2, (midi - 69) / 12)
 
 const tocarIntervaloSintetizado = (midi1, midi2) => {
-  const ctx = getAudioContext(); const ahora = ctx.currentTime; const duracion = 2.5
-  const freq1 = midiToFrecuencia(midi1); const osc1 = ctx.createOscillator(); const gain1 = ctx.createGain()
-  osc1.type = 'triangle'; osc1.frequency.setValueAtTime(freq1, ahora); gain1.gain.setValueAtTime(0.4, ahora); gain1.gain.exponentialRampToValueAtTime(0.01, ahora + duracion)
-  osc1.connect(gain1).connect(ctx.destination); osc1.start(ahora); osc1.stop(ahora + duracion)
-  const freq2 = midiToFrecuencia(midi2); const osc2 = ctx.createOscillator(); const gain2 = ctx.createGain()
-  osc2.type = 'triangle'; osc2.frequency.setValueAtTime(freq2, ahora); gain2.gain.setValueAtTime(0.4, ahora); gain2.gain.exponentialRampToValueAtTime(0.01, ahora + duracion)
-  osc2.connect(gain2).connect(ctx.destination); osc2.start(ahora); osc2.stop(ahora + duracion)
+  const ctx = getAudioContext() // Al llamar esto, se desbloquea solo si hace falta
+  const ahora = ctx.currentTime
+  const duracion = 2.5
+  
+  // Nota 1
+  const freq1 = midiToFrecuencia(midi1)
+  const osc1 = ctx.createOscillator(); const gain1 = ctx.createGain()
+  osc1.type = 'triangle'; osc1.frequency.setValueAtTime(freq1, ahora)
+  gain1.gain.setValueAtTime(0.4, ahora); gain1.gain.exponentialRampToValueAtTime(0.01, ahora + duracion)
+  osc1.connect(gain1).connect(masterGain) // <--- AHORA SE CONECTA AL MASTER, NO AL DESTINO
+  osc1.start(ahora); osc1.stop(ahora + duracion)
+
+  // Nota 2
+  const freq2 = midiToFrecuencia(midi2)
+  const osc2 = ctx.createOscillator(); const gain2 = ctx.createGain()
+  osc2.type = 'triangle'; osc2.frequency.setValueAtTime(freq2, ahora)
+  gain2.gain.setValueAtTime(0.4, ahora); gain2.gain.exponentialRampToValueAtTime(0.01, ahora + duracion)
+  osc2.connect(gain2).connect(masterGain) // <--- AHORA SE CONECTA AL MASTER, NO AL DESTINO
+  osc2.start(ahora); osc2.stop(ahora + duracion)
+  
   isPlaying.value = true
   setTimeout(() => isPlaying.value = false, duracion * 1000)
 }
@@ -424,8 +433,17 @@ const tocaIntervalo = (objeto) => {
 }
 
 const detenerAudio = () => {
-  if (audioCtx) audioCtx.close().catch(()=>{}); audioCtx = null // Cerramos y reseteamos para cortar el sonido
-  jugando.value = false; isPlaying.value = false
+  // NUEVA FORMA DE HACER STOP: Bajamos el volumen maestro a 0 instantáneamente
+  if (masterGain && audioCtx) {
+    masterGain.gain.setValueAtTime(0, audioCtx.currentTime)
+    // Lo volvemos a subir un microsegundo después para que el próximo Play funcione
+    setTimeout(() => {
+      if(masterGain) masterGain.gain.setValueAtTime(1.0, audioCtx.currentTime)
+    }, 50)
+  }
+  
+  jugando.value = false
+  isPlaying.value = false
   if (intervaloContinuum) clearInterval(intervaloContinuum)
 }
 
@@ -506,10 +524,6 @@ watch([tipoEscalaActual, nombreTonicaActual, octavaActual], () => {
 })
 
 onMounted(() => {
-  // --- DESBLOQUEO DE AUDIO PARA MÓVILES ---
-  document.body.addEventListener('touchstart', desbloquearAudioMovil, { once: true })
-  document.body.addEventListener('click', desbloquearAudioMovil, { once: true })
-  // -------------------------------------------
   generarMapaDiatonico()
   const textoCompleto = "Seleccione los intervalos que desea trabajar, individualmente o por categorías."
   let pos = 0
