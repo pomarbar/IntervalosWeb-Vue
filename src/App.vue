@@ -385,19 +385,35 @@ const selectArchivo = () => {
 // ==================== MOTOR WEB AUDIO API ====================
 let audioCtx = null
 let masterGain = null
+let calentado = false // <-- LA BANDERA MÁGICA
 
 const getAudioContext = () => {
   if (!audioCtx) {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)()
-    // Creamos un control de volumen maestro que no se destruye nunca
+    
+    // Mantenemos el control maestro que creamos antes para el botón Stop
     masterGain = audioCtx.createGain()
     masterGain.gain.setValueAtTime(1.0, audioCtx.currentTime)
     masterGain.connect(audioCtx.destination)
   }
-  // El truco móvil: Siempre intentamos despertarlo. Es seguro llamarlo varias veces.
+  
   if (audioCtx.state === 'suspended') {
     audioCtx.resume()
   }
+  
+  // ---> INICIO DEL SECRETO EXTRAÍDO DE TU OTRA APP <---
+  if (!calentado) {
+    calentado = true
+    // Creamos un buffer (espacio en RAM) de 1 muestra, es decir, 1 milisegundo de silencio total
+    const bufferSilencio = audioCtx.createBuffer(1, 1, audioCtx.sampleRate)
+    const fuenteSilencio = audioCtx.createBufferSource()
+    fuenteSilencio.buffer = bufferSilencio
+    // Lo conectamos directamente a la salida para que el móvil escuche "algo" y desbloquee el hardware
+    fuenteSilencio.connect(audioCtx.destination)
+    fuenteSilencio.start()
+  }
+  // ---> FIN DEL SECRETO <---
+
   return audioCtx
 }
 
@@ -520,7 +536,7 @@ let relojTimer = null
 
 watch([tipoEscalaActual, nombreTonicaActual, octavaActual], () => {
   generarMapaDiatonico()
-  if (estado.value === 'tocar') { llenarMatriz() } // Si cambia la tonalidad mientras juega, recalcula
+  if (estado.value === 'tocar') { llenarMatriz() } // Si cambia la tonalidad mientras juega, recalcgit pula
 })
 
 onMounted(() => {
