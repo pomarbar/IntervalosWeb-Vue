@@ -270,18 +270,15 @@ const toggleIntervalo = (intervalo) => {
     evaluar()
   }
 }
-
+// --- DESBLOQUEO MÓVIL (Aporte del usuario: AudioSession + Click Global) ---
+if (navigator.audioSession) {
+  navigator.audioSession.type = "playback";
+}
 
 document.addEventListener('click', () => {
-    if (audioCtx.state === 'suspended') {
-        audioCtx.resume();
-    }
-    // Reproducir un sonido corto o buffer vacío para destrabar en móviles
-    const buffer = audioCtx.createBuffer(1, 1, 22050);
-    const source = audioCtx.createBufferSource();
-    source.buffer = buffer;
-    source.connect(audioCtx.destination);
-    source.start(0);
+  // En lugar de repetir el código del buffer, llamamos a nuestra función segura.
+  // Esto crea el contexto si no existe, y dispara el buffer silenciosointerno.
+  getAudioContext() 
 }, { once: true });
 
 const handleGenericClick = (grupo) => {
