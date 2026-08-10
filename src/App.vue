@@ -384,9 +384,25 @@ const selectArchivo = () => {
 
 // ==================== MOTOR WEB AUDIO API ====================
 let audioCtx = null
+let isAudioUnlocked = false
+
+// Esta función se ejecuta con el primer toque del usuario en todo el cuerpo de la app
+const desbloquearAudioMovil = () => {
+  if (isAudioUnlocked) return
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+  
+  // Si está en estado "suspended" (bloqueado por el móvil), lo forzamos a despertar
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume().then(() => {
+      isAudioUnlocked = true
+    })
+  } else {
+    isAudioUnlocked = true
+  }
+}
+// Nuestra función original, pero ahora más limpia
 const getAudioContext = () => {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)()
-  if (audioCtx.state === 'suspended') audioCtx.resume()
   return audioCtx
 }
 const midiToFrecuencia = (midi) => 440 * Math.pow(2, (midi - 69) / 12)
@@ -490,6 +506,10 @@ watch([tipoEscalaActual, nombreTonicaActual, octavaActual], () => {
 })
 
 onMounted(() => {
+  // --- DESBLOQUEO DE AUDIO PARA MÓVILES ---
+  document.body.addEventListener('touchstart', desbloquearAudioMovil, { once: true })
+  document.body.addEventListener('click', desbloquearAudioMovil, { once: true })
+  // -------------------------------------------
   generarMapaDiatonico()
   const textoCompleto = "Seleccione los intervalos que desea trabajar, individualmente o por categorías."
   let pos = 0
