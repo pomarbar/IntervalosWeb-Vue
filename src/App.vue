@@ -5,16 +5,16 @@
 
     <!-- Panel Superior -->
         <div id="panelSuperior">
-          <span>Intervalos armónicos</span>
+          <span>Intervalos armónicos en:</span>
           <div id="selector-tonalidad">
-            <select v-model="tipoEscalaActual" id="tipo-escala">
-              <option value="mayor">Mayor</option>
-              <option value="menor armónica">Menor Armónica</option>
-            </select>
             <select v-model="nombreTonicaActual" id="tonica">
               <option v-for="tono in diccionarioTonos[tipoEscalaActual === 'mayor' ? 'Mayores' : 'Menores']" :key="tono.id" :value="tono.nombre">
                 {{ tono.nombre }}
               </option>
+            </select>
+            <select v-model="tipoEscalaActual" id="tipo-escala">
+              <option value="mayor">Mayor</option>
+              <option value="menor armónica" disabled>Menor Armónica</option>
             </select>
           </div>
         </div>
@@ -149,8 +149,8 @@ const getNombresEscala = (nombreTonica) => {
 }
 
 // ==================== DEFINICIONES DE INTERFAZ Y RANGO ====================
-const MIDI_MIN = 43 // Sol2
-const MIDI_MAX = 79 // Sol5
+const MIDI_MIN = 48 // Do3
+const MIDI_MAX = 81 // La5
 
 const botonesIntervalo = [
   { id: 'unisono', nombreCorto: 'U', cat: 'J', grupo: null, semitonos: 0 },
@@ -185,6 +185,7 @@ const jugando = ref(false)
 const isPlaying = ref(false)
 let poolDeJuego = []
 let intervaloContinuum = null
+let catRespuestaTemp = null
 
 // --- Configuración Tonalidad ---
 const tipoEscalaActual = ref('mayor')
@@ -272,9 +273,16 @@ const toggleIntervalo = (intervalo) => {
 
 const handleGenericClick = (grupo) => {
   if (estado.value === 'tocar') {
-    respuestaTexto.value = grupo.idGrupo === 'unisono' ? 'Unísono' : grupo.idGrupo === '8va' ? 'Octava' : grupo.miembros[0].nombreCorto.replace(/[mM]/, '') // Extrae "3" de "3m"
+    // Enviamos la abreviatura base del botón
+    let respuesta = grupo.idGrupo
+    if (respuesta === 'unisono') respuesta = 'U'
+    if (respuesta === '8va') respuesta = '8'
+    
+    respuestaTexto.value = respuesta
     evaluar()
-  } else if (estado.value === 'selector') toggleGenerico(grupo)
+  } else if (estado.value === 'selector') {
+    toggleGenerico(grupo)
+  }
 }
 
 // Funciones para renderizar el HTML (AHORA APUNTAN A botonesIntervalo)
@@ -318,10 +326,13 @@ const toggleCategoria = (cat) => {
 
 const handleCategoriaClick = (cat) => {
   if (estado.value === 'tocar' && modo.value) {
-    const nombreCat = cat === 'J' ? 'Justo' : (cat === 'C' ? 'Consonante' : 'Disonante')
-    respuestaTexto.value = nombreCat
+    catRespuestaTemp = cat // Guardamos la letra 'C', 'J' o 'D' directamente
+    // Mostramos la palabra en la pantalla solo para que el usuario la lea
+    respuestaTexto.value = cat === 'J' ? 'Justo' : (cat === 'C' ? 'Consonante' : 'Disonante')
     evaluar()
-  } else if (estado.value === 'selector') toggleCategoria(cat)
+  } else if (estado.value === 'selector') {
+    toggleCategoria(cat)
+  }
 }
 
 // ==================== LÓGICA DE JUEGO ====================
@@ -436,14 +447,33 @@ const togglePlayStop = () => { if (isPlaying.value) detenerAudio(); else jugar()
 
 const evaluar = () => {
   mostrarCheck.value = false 
+  
   setTimeout(() => {
-    const respuesta = respuestaTexto.value; const correcta = datosInterv.value.nombre; const grupoId = datosInterv.value.grupo; const catCorrecta = datosInterv.value.cat
     let esCorrecto = false
-    if (respuesta === correcta) esCorrecto = true
-    else if (correcta.startsWith(respuesta + ' ')) { if (grupoId && isGenericActive(grupoId)) esCorrecto = true }
-    else if (respuesta === 'Justo' && catCorrecta === 'J') esCorrecto = true
-    else if (respuesta === 'Consonante' && catCorrecta === 'C') esCorrecto = true
-    else if (respuesta === 'Disonante' && catCorrecta === 'D') esCorrecto = true
+    const respuesta = respuestaTexto.value.trim()
+    const correcta = datosInterv.value.nombre.trim()
+    const grupoId = datosInterv.value.grupo
+    const catCorrecta = datosInterv.value.cat
+    
+    // 1. NIVEL ESPECÍFICO: Exacto (ej: '3m' === '3m')
+    if (respuesta === correcta) {
+      esCorrecto = true
+    }
+
+    // 2. NIVEL MEDIO: Genérico (ej: '3' === '3') - SOLO SE COMPRUEBA SI EL ANTERIOR FALLÓ
+    if (!esCorrecto && grupoId && isGenericActive(grupoId)) {
+      const baseCorrecta = correcta.replace(/[mM]$/, '') 
+      if (respuesta === baseCorrecta) {
+        esCorrecto = true
+      }
+    }
+
+    // 3. NIVEL AMPLIO: Categoría (ej: 'C' === 'C') - SOLO SE COMPRUEBA SI LOS ANTERIORES FALLARON
+    if (!esCorrecto && catRespuestaTemp !== null && catRespuestaTemp === catCorrecta) {
+      esCorrecto = true
+    }
+
+    catRespuestaTemp = null 
 
     if (esCorrecto) { checkmarkImg.value = '/grafs/acierto.png'; checkmarkScale.value = 'scale(1.0)' }
     else { checkmarkImg.value = '/grafs/error.png'; checkmarkScale.value = 'scale(0.7)' }
