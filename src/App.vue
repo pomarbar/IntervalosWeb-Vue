@@ -180,12 +180,79 @@ const checkmarkScale = ref('scale(1.0)')
 const reloj = ref('')
 const textoInstruccion = ref('')
 const datosInterv = ref({ lista: -1, item: -1, nombre: '', id: '', grupo: null, cat: null })
-const matrizInterv = ref([])
 const jugando = ref(false)
 const isPlaying = ref(false)
-let poolDeJuego = []
 let intervaloContinuum = null
 let catRespuestaTemp = null
+// ==================== SISTEMA DE BOLSAS DE INTERVALOS ====================
+let bolsasIntervalos = {}      // Objeto: { '3M': [ {midi1, midi2...}, ... ], '4J': [...] }
+let listaBolsasActivas = []   // Arreglo de nombres de bolsas restantes en la ronda actual
+let ultimoIntervaloTocado = null // Guarda el último objeto para el botón "Repetir"
+
+// Llena las bolsas basándose en lo que el usuario seleccionó en la interfaz
+const llenarBolsas = () => {
+  bolsasIntervalos = {}
+  const idsActivos = new Set()
+
+  // 1. Averiguar qué IDs de botones están seleccionados (ej: '3M', '3_gen')
+  seleccionados.value.forEach(id => {
+    if (id.endsWith('_gen')) {
+      // Si es genérico (ej: 3_gen), activamos sus dos hijos (3m y 3M)
+      const grupo = id.replace('_gen', '')
+      botonesIntervalo.filter(b => b.grupo === grupo).forEach(b => idsActivos.add(b.id))
+    } else {
+      idsActivos.add(id)
+    }
+  })
+
+  // 2. Llenar cada bolsa sacando los intervalos del Mapa Diatónico
+  idsActivos.forEach(id => {
+    // Hacemos una copia del mapa para no destruir los datos originales
+    bolsasIntervalos[id] = mapaIntervalosEscala
+      .filter(i => i.tipo === id)
+      .map(i => ({...i})) 
+  })
+
+  // 3. Preparar la lista de bolsas para esta ronda
+  reiniciarListaBolsas()
+}
+
+// Vuelve a armar la lista de bolsas con las que vamos a jugar en este ciclo
+const reiniciarListaBolsas = () => {
+  // Filtramos por si acaso alguna bolsa se quedó vacía
+  listaBolsasActivas = Object.keys(bolsasIntervalos).filter(id => bolsasIntervalos[id].length > 0)
+}
+
+// Elige el siguiente intervalo usando tu lógica de extracción
+const seleccionarIntervaloDeBolsas = () => {
+  // Si nos quedamos sin bolsas en la ronda actual, reiniciamos la ronda
+  if (listaBolsasActivas.length === 0) {
+    reiniciarListaBolsas()
+  }
+
+  // Seguridad por si no hay nada seleccionado
+  if (listaBolsasActivas.length === 0) return null
+
+  // 1. Tomar una bolsa al azar y RETIRARLA de la lista temporal
+  const idxBolsa = aleatorio(0, listaBolsasActivas.length - 1)
+  const idBolsaElegida = listaBolsasActivas[idxBolsa]
+  listaBolsasActivas.splice(idxBolsa, 1)
+
+  // 2. Sacar un intervalo al azar de esa bolsa y ELIMINARLO de la bolsa
+  const bolsa = bolsasIntervalos[idBolsaElegida]
+  const idxIntervalo = aleatorio(0, bolsa.length - 1)
+  const intervaloElegido = bolsa[idxIntervalo]
+  bolsa.splice(idxIntervalo, 1)
+
+  // 3. Si la bolsa se quedó vacía, volver a llenar esa bolsa específica
+  if (bolsa.length === 0) {
+    bolsasIntervalos[idBolsaElegida] = mapaIntervalosEscala
+      .filter(i => i.tipo === idBolsaElegida)
+      .map(i => ({...i}))
+  }
+
+  return intervaloElegido
+}
 
 // --- Configuración Tonalidad ---
 const tipoEscalaActual = ref('mayor')
@@ -242,19 +309,46 @@ const isGrupoActive = (grupoId) => isGenericActive(grupoId) || botonesIntervalo.
 
 const toggleGenerico = (grupo) => {
   const genId = grupo.idGrupo + '_gen'
-  const index = seleccionados.value.indexOf(genId)
-  if (index > -1) seleccionados.value.splice(index, 1)
-  else seleccionados.value.push(genId)
+  const miembrosIds = botonesIntervalo.filter(b => b.grupo === grupo.idGrupo).map(b => b.id)
+  const isActive = seleccionados.value.includes(genId)
+
+  if (isActive) {
+    // REGLA INVERSA: Si el número estaba activo, apagamos TODO (número, 'm' y 'M')
+    seleccionados.value = seleccionados.value.filter(id => id !== genId && !miembrosIds.includes(id))
+  } else {
+    // TU REGLA 1: Si pulso el número, se activan tanto 'm' como 'M' (y el número)
+    if (!seleccionados.value.includes(genId)) seleccionados.value.push(genId)
+    miembrosIds.forEach(id => {
+      if (!seleccionados.value.includes(id)) seleccionados.value.push(id)
+    })
+  }
 }
 
 const toggleSubIntervalo = (intervalo) => {
-  const otro = botonesIntervalo.find(i => i.grupo === intervalo.grupo && i.id !== intervalo.id)
-  if (otro) seleccionados.value = seleccionados.value.filter(id => id !== otro.id)
-  const index = seleccionados.value.indexOf(intervalo.id)
-  if (index > -1) seleccionados.value.splice(index, 1)
-  else seleccionados.value.push(intervalo.id)
   const genId = intervalo.grupo + '_gen'
-  if (!seleccionados.value.includes(genId)) seleccionados.value.push(genId)
+  const otro = botonesIntervalo.find(i => i.grupo === intervalo.grupo && i.id !== intervalo.id)
+  const otroId = otro ? otro.id : null
+  
+  const isSelfActive = seleccionados.value.includes(intervalo.id)
+  const isOtherActive = otroId ? seleccionados.value.includes(otroId) : false
+
+  if (isSelfActive) {
+    // Estamos apagando la letra pulsada
+    seleccionados.value = seleccionados.value.filter(id => id !== intervalo.id)
+    
+    if (!isOtherActive) {
+      // TU REGLA 3: Si apagué 'm' y 'M' ya estaba apagado, apago también el número
+      seleccionados.value = seleccionados.value.filter(id => id !== genId)
+    } else {
+      // TU REGLA 2: Si apagué 'M' pero 'm' sigue encendido, el número SE QUEDA encendido (no hago nada extra)
+    }
+  } else {
+    // Estamos encendiendo la letra pulsada
+    if (!seleccionados.value.includes(intervalo.id)) seleccionados.value.push(intervalo.id)
+    
+    // TU REGLA 1 y 4: Encender una letra SIEMPRE enciende el número (si no lo estaba)
+    if (!seleccionados.value.includes(genId)) seleccionados.value.push(genId)
+  }
 }
 
 const toggleIntervalo = (intervalo) => {
@@ -316,21 +410,60 @@ const getIntervalosAgrupadosPorCategoria = (cat) => {
 }
 
 const estaCategoriaActiva = (cat) => {
-  const gruposDeCat = [...new Set(botonesIntervalo.filter(i => i.cat === cat && i.grupo).map(i => i.grupo))]
-  const singlesDeCat = botonesIntervalo.filter(i => i.cat === cat && !i.grupo)
-  return gruposDeCat.every(g => isGenericActive(g)) && singlesDeCat.every(s => seleccionados.value.includes(s.id))
+  // 1. Sacamos TODOS los IDs que componen esta categoría (números, 'm', 'M')
+  const idsEnCategoria = botonesIntervalo
+    .filter(i => i.cat === cat)
+    .flatMap(i => {
+      if (i.grupo) {
+        // Si es un grupo (ej: 3), devolvos el número genérico ('3_gen') y las letras ('3m', '3M')
+        return [i.grupo + '_gen', i.id]
+      } else {
+        // Si es simple (ej: U, 4, 5), devuelvo solo su ID
+        return [i.id]
+      }
+    })
+
+  // 2. La categoría brilla si AL MENOS UNO de esos IDs está seleccionado
+  return idsEnCategoria.some(id => seleccionados.value.includes(id))
 }
 
 const toggleCategoria = (cat) => {
   if (estado.value !== 'selector') return
+  
   const gruposDeCat = [...new Set(botonesIntervalo.filter(i => i.cat === cat && i.grupo).map(i => i.grupo))]
   const singlesDeCat = botonesIntervalo.filter(i => i.cat === cat && !i.grupo)
+  
   if (estaCategoriaActiva(cat)) {
-    gruposDeCat.forEach(g => seleccionados.value = seleccionados.value.filter(id => id !== g + '_gen'))
-    singlesDeCat.forEach(s => seleccionados.value = seleccionados.value.filter(id => id !== s.id))
+    // DESELECCIONAR TODO: Apagamos números, 'm' y 'M' de esta categoría
+    const idsARemover = new Set()
+    
+    singlesDeCat.forEach(s => idsARemover.add(s.id))
+    
+    gruposDeCat.forEach(g => {
+      idsARemover.add(g + '_gen') // Apaga el número
+      botonesIntervalo.filter(b => b.grupo === g).forEach(b => {
+        idsARemover.add(b.id) // Apaga la 'm' y la 'M'
+      })
+    })
+    
+    seleccionados.value = seleccionados.value.filter(id => !idsARemover.has(id))
+    
   } else {
-    gruposDeCat.forEach(g => { if (!isGenericActive(g)) seleccionados.value.push(g + '_gen') })
-    singlesDeCat.forEach(s => { if (!seleccionados.value.includes(s.id)) seleccionados.value.push(s.id) })
+    // SELECCIONAR TODO: Encendemos números, 'm' y 'M' de esta categoría
+    const idsAAgregar = new Set()
+    
+    singlesDeCat.forEach(s => { if (!seleccionados.value.includes(s.id)) idsAAgregar.add(s.id) })
+    
+    gruposDeCat.forEach(g => {
+      const genId = g + '_gen'
+      if (!seleccionados.value.includes(genId)) idsAAgregar.add(genId) // Enciende el número
+      
+      botonesIntervalo.filter(b => b.grupo === g).forEach(b => {
+        if (!seleccionados.value.includes(b.id)) idsAAgregar.add(b.id) // Enciende 'm' y 'M'
+      })
+    })
+    
+    seleccionados.value.push(...idsAAgregar)
   }
 }
 
@@ -377,19 +510,28 @@ const seleccionaItem = (lista) => {
 
 const selectArchivo = () => {
   mostrarCheck.value = false; respuestaTexto.value = ''
-  const indicesDisponibles = []
-  matrizInterv.value.forEach((sublista, index) => { if (sublista.length > 0) indicesDisponibles.push(index) })
-  if (indicesDisponibles.length === 0) { llenarMatriz(); return selectArchivo() }
+  
+  const objetoIntervalo = seleccionarIntervaloDeBolsas()
+  
+  if (objetoIntervalo) {
+    ultimoIntervaloTocado = objetoIntervalo // Lo guardamos por si el usuario pulsa "Repetir"
+    tocaIntervalo(objetoIntervalo)
+    
+    // Guardamos los datos para la evaluación (ya no usamos índices de matriz)
+    datosInterv.value = { 
+      lista: 0, 
+      item: 0, 
+      nombre: objetoIntervalo.nombre, 
+      id: objetoIntervalo.tipo, 
+      grupo: objetoIntervalo.grupo, 
+      cat: objetoIntervalo.cat 
+    }
+  }
+}
 
-  const subIndex = seleccionaItem(indicesDisponibles)
-  let listaInterna = matrizInterv.value[subIndex]
-  if (listaInterna.length === 0) matrizInterv.value[subIndex] = [0,1,2,3,4,5,6,7,8,9,10,11,12]
-
-  seleccionaItem(matrizInterv.value[subIndex]) // Consumimos el item para que no se repita
-  const objetoIntervalo = poolDeJuego[subIndex] 
-
-  tocaIntervalo(objetoIntervalo)
-  datosInterv.value = { lista: subIndex, item: 0, nombre: objetoIntervalo.nombre, id: objetoIntervalo.tipo, grupo: objetoIntervalo.grupo, cat: objetoIntervalo.cat }
+const repetirIntervalo = () => {
+  // Simplemente tocamos el último objeto guardado
+  if (ultimoIntervaloTocado) tocaIntervalo(ultimoIntervaloTocado)
 }
 
 // ==================== MOTOR WEB AUDIO API ====================
@@ -475,9 +617,26 @@ const detenerAudio = () => {
 
 const alternarEstado = () => {
   if (estado.value === 'selector') {
-    if (seleccionados.value.length === 0) { mostrarTextoI.value = true; setTimeout(() => mostrarTextoI.value = false, 2000); return }
-    llenarMatriz(); estado.value = 'tocar'; modo.value = ''
-  } else salir()
+    if (seleccionados.value.length === 0) { 
+      mostrarTextoI.value = true; 
+      setTimeout(() => mostrarTextoI.value = false, 2000); 
+      return 
+    }
+    
+    // 1. CAMBIAMOS EL ESTADO PRIMERO (Esto desbloquea los botones de la UI inmediatamente)
+    estado.value = 'tocar'
+    modo.value = ''
+    
+    // 2. INTENTAMOS LLENAR LAS BOLSAS (Si falla, no rompe la interfaz)
+    try {
+      llenarBolsas()
+    } catch (error) {
+      console.error("Error al generar las bolsas de intervalos:", error)
+    }
+    
+  } else {
+    salir()
+  }
 }
 
 const salir = () => { detenerAudio(); estado.value = 'selector'; modo.value = ''; respuestaTexto.value = '' }
@@ -496,11 +655,6 @@ const jugar = () => {
 const jugarContinuum = () => {
   if (intervaloContinuum) clearInterval(intervaloContinuum)
   intervaloContinuum = setInterval(() => { if (jugando.value) selectArchivo(); else clearInterval(intervaloContinuum) }, 3200)
-}
-
-const repetirIntervalo = () => {
-  const objetoIntervalo = poolDeJuego[datosInterv.value.lista]
-  tocaIntervalo(objetoIntervalo)
 }
 
 const togglePlayStop = () => { if (isPlaying.value) detenerAudio(); else jugar() }
@@ -546,7 +700,7 @@ let relojTimer = null
 
 watch([tipoEscalaActual, nombreTonicaActual, octavaActual], () => {
   generarMapaDiatonico()
-  if (estado.value === 'tocar') { llenarMatriz() } // Si cambia la tonalidad mientras juega, recalcgit pula
+  if (estado.value === 'tocar') { llenarBolsas() } // <--- CAMBIO AQUÍ
 })
 
 onMounted(() => {
