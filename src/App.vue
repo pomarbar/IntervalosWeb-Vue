@@ -800,14 +800,24 @@ const evaluar = () => {
     }
 
     catRespuestaTemp = null 
-    // --- GUARDAR RESPUESTA SI ESTAMOS EN MODO TEST ---
+       // --- GUARDAR O REEMPLAZAR RESPUESTA EN MODO TEST ---
     if (modo.value === 'test') {
-      currentTestAnswered = true 
-      testResults.value.push({
+      const nuevaRespuesta = {
         played: datosInterv.value.nombre,
-        answered: respuestaTexto.value, // Aquí guarda exactamente "3" o "J", no "3m"
+        answered: respuestaTexto.value, 
         isCorrect: esCorrecto
-      })
+      }
+
+      if (currentTestAnswered) {
+        // Si YA había respondido antes a este mismo ejercicio, 
+        // REEMPLAZAMOS la última entrada del array en lugar de crear una nueva.
+        // Usamos splice para asegurar que Vue detecte el cambio en el v-for de la barra inferior.
+        testResults.value.splice(testResults.value.length - 1, 1, nuevaRespuesta)
+      } else {
+        // Si es la primera vez que responde a este ejercicio, lo agregamos normal
+        currentTestAnswered = true
+        testResults.value.push(nuevaRespuesta)
+      }
     }
     // OCULTAR EVALUACIÓN DIRECTA SI ESTAMOS EN TEST
     if (modo.value !== 'test') {
