@@ -77,8 +77,17 @@
 
       <!-- Respuesta y Checkmark -->
       <div id="respuesta">
-        <span id="respuesta-texto">{{ respuestaTexto }}</span>
-        <img v-if="mostrarCheck" id="checkmark" :src="checkmarkImg" :style="{ transform: checkmarkScale }" class="fade-in" />
+        <!-- COMPORTAMIENTO NORMAL -->
+        <template v-if="modo !== 'test'">
+          <span id="respuesta-texto">{{ respuestaTexto }}</span>
+          <img v-if="mostrarCheck" id="checkmark" :src="checkmarkImg" :style="{ transform: checkmarkScale }" class="fade-in" />
+        </template>
+
+        <!-- COMPORTAMIENTO TEST (Acumulado con salto de línea) -->
+        <div v-if="modo === 'test' && !testFinished" id="respuesta-acumulada">
+          <span v-for="(res, i) in testResults" :key="i" class="tag-respuesta" :class="{ 'tag-ta': res.answered === 'TA' }">{{ res.answered }}</span>
+          <span v-if="testCount > testResults.length" class="tag-respuesta esperando">...</span>
+        </div>
       </div>
       <!-- Panel Derecho (Controles) -->
       <div id="panelDerecho">
@@ -103,11 +112,53 @@
         
         <button v-if="estado === 'tocar'" class="modo" :class="{ active: modo === 'discreto' }" @click="cambiarModo('discreto')">Modo Discreto</button>
         <button v-if="estado === 'tocar'" class="modo" :class="{ active: modo === 'continuum' }" @click="cambiarModo('continuum')">Modo Continuum</button>
+                <button v-if="estado === 'tocar'" class="modo" :class="{ active: modo === 'test' }" @click="cambiarModo('test')">Modo Test (20)</button>
+        
+        <!-- Contador en vivo del Test -->
+        <div v-if="estado === 'tocar' && modo === 'test' && !testFinished" id="test-counter">
+          Pregunta: {{ testCount }} / {{ TEST_LIMIT }}
+        </div>
       </div>
     </div>
 
     <div id="reloj">{{ reloj }}</div>
-    
+
+       <!-- ==================== PANTALLA DE RESULTADOS DEL TEST ==================== -->
+    <div v-if="testFinished" id="pantalla-resultados">
+      <h2>Resultados del Test</h2>
+      
+      <div id="puntuacion-final">
+        <span class="puntos">{{ testResults.filter(r => r.isCorrect).length }}</span> / {{ TEST_LIMIT }}
+      </div>
+      <p id="leyenda-ta">* TA = Tiempo agotado</p>
+
+      <!-- Tabla Matricial 3x21 -->
+      <div id="contenedor-tabla">
+        <table id="tabla-resultados">
+          <thead>
+            <tr>
+              <th class="celda-etiqueta">#</th>
+              <th v-for="i in TEST_LIMIT" :key="'h'+i">{{ i }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="celda-etiqueta">App</td>
+              <!-- Fíjate que agregué la clase "app-color" aquí -->
+              <td v-for="(res, index) in testResults" :key="'a'+index" class="celda-dato app-color">{{ res.played }}</td>
+            </tr>
+            <tr>
+              <td class="celda-etiqueta">Tú</td>
+              <td v-for="(res, index) in testResults" :key="'t'+index" class="celda-dato" :class="{ verde: res.isCorrect, rojo: !res.isCorrect }">
+                {{ res.answered }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <button id="btn-repetir-test" @click="salir">VOLVER A SELECCIONAR</button>
+    </div>
   </div>
 </template>
 
@@ -136,6 +187,7 @@ const diccionarioTonos = {
 }
 const nombresDeNotas = ['FAb','DOb','SOLb','REb','LAb','MIb','SIb','FA','DO','SOL','RE','LA','MI','SI','FA#','DO#','SOL#','RE#','LA#','MI#','SI#']
 const ordenNombresNotas = [1,3,5,0,2,4,6]
+
 
 const getNombresEscala = (nombreTonica) => {
   const rootIdx = nombresDeNotas.findIndex(n => n.toUpperCase() === nombreTonica.toUpperCase())
@@ -184,6 +236,13 @@ const jugando = ref(false)
 const isPlaying = ref(false)
 let intervaloContinuum = null
 let catRespuestaTemp = null
+
+// ==================== ESTADO DEL MODO TEST ====================
+const TEST_LIMIT = 20
+const testCount = ref(0)
+const testResults = ref([])
+const testFinished = ref(false)
+let currentTestAnswered = false // Bandera para saber si respondió antes de que pase al siguiente
 // ==================== SISTEMA DE BOLSAS DE INTERVALOS ====================
 let bolsasIntervalos = {}      // Objeto: { '3M': [ {midi1, midi2...}, ... ], '4J': [...] }
 let listaBolsasActivas = []   // Arreglo de nombres de bolsas restantes en la ronda actual
@@ -471,7 +530,7 @@ const handleCategoriaClick = (cat) => {
   if (estado.value === 'tocar' && modo.value) {
     catRespuestaTemp = cat // Guardamos la letra 'C', 'J' o 'D' directamente
     // Mostramos la palabra en la pantalla solo para que el usuario la lea
-    respuestaTexto.value = cat === 'J' ? 'Justo' : (cat === 'C' ? 'Consonante' : 'Disonante')
+    respuestaTexto.value = cat
     evaluar()
   } else if (estado.value === 'selector') {
     toggleCategoria(cat)
@@ -639,22 +698,75 @@ const alternarEstado = () => {
   }
 }
 
-const salir = () => { detenerAudio(); estado.value = 'selector'; modo.value = ''; respuestaTexto.value = '' }
+const salir = () => { 
+  detenerAudio(); 
+  estado.value = 'selector'; 
+  modo.value = ''; 
+  respuestaTexto.value = '';
+  // Reseteo del test por si abandonan a la mitad
+  testFinished.value = false; 
+  testResults.value = []
+}
 
 const cambiarModo = (nuevoModo) => {
-  detenerAudio(); modo.value = nuevoModo
+  detenerAudio()
+  modo.value = nuevoModo
+  // El continuum normal arranca solo, pero el test esperará a que pulsemos Play
   if (nuevoModo === 'continuum') jugarContinuum()
 }
 
 const jugar = () => {
   isPlaying.value = true
-  if (modo.value === 'discreto') selectArchivo()
-  else if (modo.value === 'continuum') { jugando.value = true; jugarContinuum() }
+  if (modo.value === 'discreto') {
+    selectArchivo()
+  } else if (modo.value === 'continuum') { 
+    jugando.value = true
+    jugarContinuum() 
+  } else if (modo.value === 'test') {
+    // INICIALIZAMOS EL TEST
+    testCount.value = 0
+    testResults.value = []
+    testFinished.value = false
+    currentTestAnswered = false
+    respuestaTexto.value = ''
+    jugando.value = true
+    jugarContinuum()
+  }
 }
 
 const jugarContinuum = () => {
   if (intervaloContinuum) clearInterval(intervaloContinuum)
-  intervaloContinuum = setInterval(() => { if (jugando.value) selectArchivo(); else clearInterval(intervaloContinuum) }, 3200)
+  
+  intervaloContinuum = setInterval(() => {
+    if (!jugando.value) { clearInterval(intervaloContinuum); return }
+
+    // --- LÓGICA ESPECÍFICA PARA EL MODO TEST ---
+    if (modo.value === 'test') {
+      // 1. Si ya pasamos el primero y NO respondió, registramos fallo
+      if (testCount.value > 0 && !currentTestAnswered) {
+        testResults.value.push({
+          played: datosInterv.value.nombre,
+          answered: 'TA',
+          isCorrect: false
+        })
+      }
+      
+      // 2. Verificamos si ya terminamos los 20
+      if (testCount.value >= TEST_LIMIT) {
+        detenerAudio()
+        testFinished.value = true
+        return
+      }
+      
+      // 3. Preparamos el siguiente intervalo
+      testCount.value++
+      currentTestAnswered = false
+      respuestaTexto.value = '' // Limpiamos la pantalla para la nueva pregunta
+    }
+    // --- FIN LÓGICA TEST ---
+
+    selectArchivo()
+  }, 3200)
 }
 
 const togglePlayStop = () => { if (isPlaying.value) detenerAudio(); else jugar() }
@@ -688,6 +800,21 @@ const evaluar = () => {
     }
 
     catRespuestaTemp = null 
+    // --- GUARDAR RESPUESTA SI ESTAMOS EN MODO TEST ---
+    if (modo.value === 'test') {
+      currentTestAnswered = true 
+      testResults.value.push({
+        played: datosInterv.value.nombre,
+        answered: respuestaTexto.value, // Aquí guarda exactamente "3" o "J", no "3m"
+        isCorrect: esCorrecto
+      })
+    }
+    // OCULTAR EVALUACIÓN DIRECTA SI ESTAMOS EN TEST
+    if (modo.value !== 'test') {
+      if (esCorrecto) { checkmarkImg.value = '/grafs/acierto.png'; checkmarkScale.value = 'scale(1.0)' }
+      else { checkmarkImg.value = '/grafs/error.png'; checkmarkScale.value = 'scale(0.7)' }
+      mostrarCheck.value = true
+    }
 
     if (esCorrecto) { checkmarkImg.value = '/grafs/acierto.png'; checkmarkScale.value = 'scale(1.0)' }
     else { checkmarkImg.value = '/grafs/error.png'; checkmarkScale.value = 'scale(0.7)' }
@@ -834,5 +961,164 @@ onUnmounted(() => { if (relojTimer) clearInterval(relojTimer); if (intervaloCont
 @media (max-width: 400px) {
   .intervalo-btn { width: 38px; font-size: 12px; }
   .categ { width: 35px; font-size: 16px; }
+}
+/* --- MODO TEST --- */
+#test-counter {
+  width: 100%;
+  text-align: center;
+  font-family: futura;
+  font-size: 16px;
+  color: #ffc107;
+  margin-top: 10px;
+  font-weight: bold;
+}
+
+/* --- RESPUESTA Y CHECKMARK --- */
+#respuesta {
+  width: 100%; 
+  min-height: 35px; /* <-- ANTES DECÍA SOLO 'height: 35px'. Esto le permite crecer */
+  height: auto;     /* <-- AÑADE ESTO para que se adapte al contenido */
+  background-color: rgb(50,50,50); 
+  color: rgb(234,247,233); 
+  font-family: futura; 
+  display: flex; 
+  align-items: center;
+  justify-content: space-between; /* Mantiene tu orden original para cuando no es test */
+  border-radius: 6px; 
+  margin-top: 20px; 
+  font-size: 18px;
+  padding: 8px 15px; /* <-- AUMENTÉ el padding vertical (antes era 0) para dar espacio al segundo renglón */
+  box-sizing: border-box; 
+}
+
+/* Barra de respuestas acumuladas */
+#respuesta-acumulada {
+  display: flex;
+  flex-wrap: wrap; /* Esto es lo que hace que salten de línea */
+  gap: 6px;
+  width: 100%;
+  justify-content: center;
+  align-items: center; /* Centra las cajitas verticalmente entre sí cuando hay 2 filas */
+}
+
+.tag-respuesta {
+  background: rgba(255,255,255,0.2);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #d4edda;
+  font-family: futura;
+}
+.tag-respuesta.tag-ta {
+  color: #f44336; /* Color rojo específico para el Tiempo Agotado en la barra */
+  font-weight: bold;
+}
+.tag-respuesta.esperando {
+  color: #888;
+  animation: pulse 1s infinite;
+}
+@keyframes pulse {
+  0% { opacity: 0.4; }
+  50% { opacity: 1; }
+  100% { opacity: 0.4; }
+}
+
+/* Pantalla de resultados */
+#pantalla-resultados {
+  position: fixed;
+  top: 0; left: 0; width: 100vw; height: 100vh;
+  background: rgba(0, 0, 0, 0.95);
+  color: white;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 50px 15px 20px 15px;
+  box-sizing: border-box;
+}
+
+#pantalla-resultados h2 {
+  font-family: futura;
+  margin-bottom: 10px;
+  color: #4caf50;
+}
+
+#puntuacion-final {
+  font-size: 42px;
+  font-family: futura;
+  margin-bottom: 20px;
+}
+.puntos { color: #4caf50; font-weight: bold; }
+
+/* Contenedor de la tabla (Permite scroll horizontal en móviles si hace falta) */
+/* Contenedor de la tabla (Centrado en la ventana) */
+#contenedor-tabla {
+  width: 90%; /* Ocupa el 90% del ancho de la pantalla */
+  max-width: 800px; /* Límite máximo para que no se vuelva gigante en monitores muy anchos */
+  margin: 0 auto; /* <-- ESTO CENTRA LA TABLA HORIENTALMENTE */
+  overflow-x: auto; /* Permite scroll horizontal solo si la pantalla es muy pequeña (ej. un móvil) */
+  margin-bottom: 30px;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* La Tabla Matricial 3x21 */
+#tabla-resultados {
+  width: 100%;
+  table-layout: fixed; /* <-- EL SECRETO: Obliga a que todas las columnas midan exactamente lo mismo */
+  border-collapse: collapse;
+  background: rgba(255,255,255,0.05);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+#tabla-resultados th, #tabla-resultados td {
+  border: 1px solid rgba(255,255,255,0.1);
+  padding: 10px 2px; 
+  text-align: center;
+  font-family: helvetica;
+  font-size: 15px;
+  white-space: nowrap; /* <-- EVITA QUE EL TEXTO BAJE DE LÍNEA y deforme el ancho */
+  overflow: hidden; /* Por si acaso, oculta lo que sobrepase */
+  text-overflow: ellipsis; /* Puntos suspensivos si algo llega a sobrepasar (aunque con tus siglas no debería pasar) */
+}
+
+.celda-etiqueta {
+  background: rgba(255,255,255,0.1);
+  font-family: futura;
+  font-weight: bold;
+  color: #ccc;
+  width: 35px; /* Reducido de 50px a 35px */
+}
+
+.celda-dato { color: #e0e0e0; }
+.celda-dato.verde { color: #4caf50; font-weight: bold; }
+.celda-dato.rojo { color: #f44336; font-weight: bold; }
+
+#btn-repetir-test {
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  padding: 12px 30px;
+  font-size: 16px;
+  font-family: futura;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+#btn-repetir-test:hover { background-color: #388e3c; transform: scale(1.05); }
+
+#leyenda-ta {
+  font-size: 12px;
+  color: #888;
+  margin-bottom: 15px;
+  font-style: italic;
+}
+
+.app-color {
+  color: #64b5f6 !important; /* Un azul claro muy limpio */
+}
+
+@media (max-width: 400px) {
+  #lista-resultados { font-size: 12px; padding: 0 10px; }
 }
 </style>
