@@ -1,23 +1,43 @@
 <template>
   <div class="app-container">
+    <!-- PANTALLA DE LOGIN INICIAL -->
+    <div v-if="mostrarLogin" id="pantalla-login">
+      <div id="login-box">
+        <h2>Intervalos Armónicos</h2>
+        <p>Ingresa tu nombre para comenzar:</p>
+        <input 
+          type="text" 
+          v-model="nombreUsuario" 
+          @keyup.enter="guardarNombre" 
+          placeholder="Tu nombre" 
+          id="input-nombre" 
+          autofocus 
+        />
+        <button @click="guardarNombre" id="btn-login">ENTRAR</button>
+      </div>
+    </div>
     <!-- Fondo -->
     <img id="fondo" src="/grafs/w12.jpg" alt="fondo" />
 
     <!-- Panel Superior -->
-        <div id="panelSuperior">
-          <span>Intervalos armónicos en:</span>
-          <div id="selector-tonalidad">
-            <select v-model="nombreTonicaActual" id="tonica">
-              <option v-for="tono in diccionarioTonos[tipoEscalaActual === 'mayor' ? 'Mayores' : 'Menores']" :key="tono.id" :value="tono.nombre">
-                {{ tono.nombre }}
-              </option>
-            </select>
-            <select v-model="tipoEscalaActual" id="tipo-escala">
-              <option value="mayor">Mayor</option>
-              <option value="menor armónica" disabled>Menor Armónica</option>
-            </select>
-          </div>
-        </div>
+    <div id="panelSuperior">
+      <span>Intervalos armónicos en:</span>
+      <div id="selector-tonalidad">
+        <select v-model="nombreTonicaActual" id="tonica">
+          <option v-for="tono in diccionarioTonos[tipoEscalaActual === 'mayor' ? 'Mayores' : 'Menores']" :key="tono.id" :value="tono.nombre">
+            {{ tono.nombre }}
+          </option>
+        </select>
+        <select v-model="tipoEscalaActual" id="tipo-escala">
+          <option value="mayor">Mayor</option>
+          <option value="menor armónica" disabled>Menor Armónica</option>
+        </select>
+      </div>
+      <div id="datos-usuario-sup">
+        <span>Hola, <strong>{{ nombreUsuario }}</strong></span>
+        <span class="cambiar-usuario" @click="cerrarSesion">Cambiar</span>
+      </div>
+    </div>
 
     <!-- Panel Izquierdo -->
     <div id="panelIzquierdo">
@@ -125,7 +145,13 @@
 
        <!-- ==================== PANTALLA DE RESULTADOS DEL TEST ==================== -->
     <div v-if="testFinished" id="pantalla-resultados">
-      <h2>Resultados del Test</h2>
+      <!-- CABECERA DEL INFORME -->
+      <div id="cabecera-informe">
+        <h2>Informe de Test</h2>
+        <p class="datos-informe">Nombre: <strong>{{ nombreUsuario }}</strong></p>
+        <p class="datos-informe">Tonalidad: <strong>{{ nombreTonicaActual }} {{ tipoEscalaActual === 'mayor' ? 'Mayor' : 'Menor' }}</strong></p>
+        <p class="datos-informe">Fecha y hora: {{ fechaHoraInforme }}</p>
+      </div>
       
       <div id="puntuacion-final">
         <span class="puntos">{{ testResults.filter(r => r.isCorrect).length }}</span> / {{ TEST_LIMIT }}
@@ -165,6 +191,39 @@
 <script setup>
 
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+
+// ==================== ESTADO DEL USUARIO ====================
+const nombreUsuario = ref('')
+const mostrarLogin = ref(true)
+const fechaHoraInforme = ref('')
+
+// Formatea la fecha y hora al estilo DD/MM/YYYY - HH:MM
+const obtenerFechaHoraInforme = () => {
+  const ahora = new Date()
+  const dia = String(ahora.getDate()).padStart(2, '0')
+  const mes = String(ahora.getMonth() + 1).padStart(2, '0')
+  const anio = ahora.getFullYear()
+  const hora = String(ahora.getHours()).padStart(2, '0')
+  const minutos = String(ahora.getMinutes()).padStart(2, '0')
+  fechaHoraInforme.value = `${dia}/${mes}/${anio} - ${hora}:${minutos}`
+}
+
+// Guarda el nombre y oculta el login
+const guardarNombre = () => {
+  const nombreLimpio = nombreUsuario.value.trim()
+  if (nombreLimpio !== '') {
+    nombreUsuario.value = nombreLimpio // Solo lo guarda en la memoria de Vue
+    mostrarLogin.value = false
+  }
+}
+
+// Por si quiere cambiar de usuario
+const cerrarSesion = () => {
+  mostrarLogin.value = true
+  nombreUsuario.value = ''
+  // Si estaba jugando, lo sacamos para que no siga sonando con el nombre viejo
+  if (estado.value === 'tocar') salir() 
+}
 
 // ==================== MOTOR TEÓRICO (TU LÓGICA) ====================
 const estructurasEscalas = {
@@ -754,6 +813,7 @@ const jugarContinuum = () => {
       // 2. Verificamos si ya terminamos los 20
       if (testCount.value >= TEST_LIMIT) {
         detenerAudio()
+        obtenerFechaHoraInforme() // <--- AÑADE ESTA LÍNEA
         testFinished.value = true
         return
       }
@@ -1053,11 +1113,7 @@ onUnmounted(() => { if (relojTimer) clearInterval(relojTimer); if (intervaloCont
   color: #4caf50;
 }
 
-#puntuacion-final {
-  font-size: 42px;
-  font-family: futura;
-  margin-bottom: 20px;
-}
+.puntos { color: #4caf50; font-weight: bold; }
 .puntos { color: #4caf50; font-weight: bold; }
 
 /* Contenedor de la tabla (Permite scroll horizontal en móviles si hace falta) */
@@ -1117,13 +1173,6 @@ onUnmounted(() => { if (relojTimer) clearInterval(relojTimer); if (intervaloCont
 }
 #btn-repetir-test:hover { background-color: #388e3c; transform: scale(1.05); }
 
-#leyenda-ta {
-  font-size: 12px;
-  color: #888;
-  margin-bottom: 15px;
-  font-style: italic;
-}
-
 .app-color {
   color: #64b5f6 !important; /* Un azul claro muy limpio */
 }
@@ -1131,4 +1180,141 @@ onUnmounted(() => { if (relojTimer) clearInterval(relojTimer); if (intervaloCont
 @media (max-width: 400px) {
   #lista-resultados { font-size: 12px; padding: 0 10px; }
 }
+/* --- PANTALLA DE LOGIN --- */
+#pantalla-login {
+  position: fixed;
+  top: 0; left: 0; width: 100vw; height: 100vh;
+  background: rgba(0, 0, 0, 0.9);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#login-box {
+  background: rgb(230,252,230);
+  padding: 40px;
+  border-radius: 12px;
+  text-align: center;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  width: 90%;
+  max-width: 350px;
+}
+#login-box h2 {
+  font-family: futura;
+  color: green;
+  margin-bottom: 10px;
+}
+#login-box p {
+  font-family: helvetica;
+  color: #333;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+#input-nombre {
+  width: 100%;
+  padding: 10px;
+  font-size: 18px;
+  border: 2px solid #ccc;
+  border-radius: 6px;
+  text-align: center;
+  font-family: futura;
+  margin-bottom: 15px;
+  box-sizing: border-box;
+  outline: none;
+}
+#input-nombre:focus { border-color: green; }
+#btn-login {
+  background: green;
+  color: white;
+  border: none;
+  padding: 10px 30px;
+  font-size: 16px;
+  font-family: futura;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+#btn-login:hover { background: darkgreen; }
+
+/* --- PANEL SUPERIOR (Usuario) --- */
+#panelSuperior {
+  /* Mantén tus estilos anteriores y añade flex-wrap para que se acomode bien */
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+#izq-superior {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+#datos-usuario-sup {
+  position: absolute;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: helvetica;
+  font-size: 14px;
+  color: white;
+}
+.cambiar-usuario {
+  margin-left: 10px;
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: 11px;
+  opacity: 0.7;
+}
+.cambiar-usuario:hover { opacity: 1; }
+
+/* --- INFORME FINAL --- */
+/* --- CONTENEDORES SUPERIORES DEL INFORME (Unificados) --- */
+#cabecera-informe, 
+#puntuacion-final {
+  width: 20%;                /* Ocupan el 90% de la pantalla */
+  max-width: 800px;          /* Pero no superan el ancho de la tabla */
+  margin: 0 auto;            /* Los centra perfectamente */
+  text-align: center;
+  border-bottom: 1px solid #444; /* La misma raya para ambos */
+  padding-bottom: 20px;      /* El mismo espaciado para ambos */
+  box-sizing: border-box;
+}
+
+#cabecera-informe {
+  margin-bottom: 15px;
+  padding-top: 10px;
+}
+
+#puntuacion-final {
+  font-size: 42px;
+  font-family: futura;
+  margin-bottom: 0; /* Quitamos el margen inferior porque ahora lo controla la leyenda */
+}
+
+.puntos { 
+  color: #4caf50; 
+  font-weight: bold; 
+}
+
+/* Leyenda del TA (Metida en el mismo ancho para no desalinear) */
+#leyenda-ta {
+  width: 90%;
+  max-width: 800px;
+  margin: 10px auto 20px auto; /* Espaciado superior e inferior */
+  text-align: right; /* La ponemos a la derecha para que quede elegante */
+  font-size: 12px;
+  color: #888;
+  font-style: italic;
+}
+#cabecera-informe h2 {
+  font-family: futura;
+  color: #4caf50;
+  margin: 0 0 10px 0;
+}
+.datos-informe {
+  font-family: helvetica;
+  color: #bbb;
+  margin: 5px 0;
+  font-size: 14px;
+}
+.datos-informe strong { color: white; }
 </style>
