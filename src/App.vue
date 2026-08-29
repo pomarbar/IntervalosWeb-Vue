@@ -1270,7 +1270,7 @@ onUnmounted(() => { if (relojTimer) clearInterval(relojTimer); if (intervaloCont
 /* --- CONTENEDORES SUPERIORES DEL INFORME (Unificados) --- */
 #cabecera-informe, 
 #puntuacion-final {
-  width: 20%;                /* Ocupan el 90% de la pantalla */
+  width: 90%;                /* Ocupan el 90% de la pantalla */
   max-width: 800px;          /* Pero no superan el ancho de la tabla */
   margin: 0 auto;            /* Los centra perfectamente */
   text-align: center;
