@@ -19,20 +19,25 @@
     <!-- Fondo -->
     <img id="fondo" src="/grafs/w12.jpg" alt="fondo" />
 
-    <!-- Panel Superior -->
+        <!-- Panel Superior -->
     <div id="panelSuperior">
-      <span>Intervalos armónicos en:</span>
-      <div id="selector-tonalidad">
-        <select v-model="nombreTonicaActual" id="tonica">
-          <option v-for="tono in diccionarioTonos[tipoEscalaActual === 'mayor' ? 'Mayores' : 'Menores']" :key="tono.id" :value="tono.nombre">
-            {{ tono.nombre }}
-          </option>
-        </select>
-        <select v-model="tipoEscalaActual" id="tipo-escala">
-          <option value="mayor">Mayor</option>
-          <option value="menor armónica" disabled>Menor Armónica</option>
-        </select>
+      <!-- Contenedor izquierdo para PC, se centra en móvil -->
+      <div id="contenedor-izq">
+        <span id="titulo-app">Intervalos armónicos en:</span>
+        <div id="selector-tonalidad">
+          <select v-model="nombreTonicaActual" id="tonica">
+            <option v-for="tono in diccionarioTonos[tipoEscalaActual === 'mayor' ? 'Mayores' : 'Menores']" :key="tono.id" :value="tono.nombre">
+              {{ tono.nombre }}
+            </option>
+          </select>
+          <select v-model="tipoEscalaActual" id="tipo-escala">
+            <option value="mayor">Mayor</option>
+            <option value="menor armónica" disabled>Menor Armónica</option>
+          </select>
+        </div>
       </div>
+
+      <!-- Datos del usuario -->
       <div id="datos-usuario-sup">
         <span>Hola, <strong>{{ nombreUsuario }}</strong></span>
         <span class="cambiar-usuario" @click="cerrarSesion">Cambiar</span>
@@ -918,14 +923,56 @@ onUnmounted(() => { if (relojTimer) clearInterval(relojTimer); if (intervaloCont
   max-width: 500px; margin: 70px auto 20px auto; background-color: rgb(230,252,230);
   padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); position: relative;
 }
+/* --- PANEL SUPERIOR (Responsive) --- */
 #panelSuperior {
-  position: fixed; top: 0; left: 0; width: 100%; text-align: center; font-family: futura, sans-serif;
-  background-color: green; color: white; font-size: 20px; padding: 10px 0; z-index: 10;
-  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  position: fixed; 
+  top: 0; left: 0; width: 100%; 
+  background-color: green; color: white; font-family: futura, sans-serif;
+  padding: 10px 20px; /* Padding horizontal para que no roce los bordes */
+  z-index: 10;
+  box-sizing: border-box;
+  
+  /* Por defecto (Computador): Fila horizontal */
+  display: flex; 
+  flex-direction: row; 
+  justify-content: space-between; 
+  align-items: center;
 }
+
+#contenedor-izq {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+#titulo-app {
+  font-size: 20px;
+}
+
 #selector-tonalidad {
-  display: flex; gap: 10px; font-size: 14px;
+  display: flex; 
+  gap: 10px; 
+  font-size: 14px;
 }
+
+#datos-usuario-sup {
+  font-family: helvetica; 
+  font-size: 14px; 
+  color: white;
+  white-space: nowrap; /* Evita que el nombre corte y baje de línea en PC */
+  text-align: right;
+}
+
+.cambiar-usuario {
+  margin-left: 8px;
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: 11px;
+  opacity: 0.7;
+}
+.cambiar-usuario:hover { opacity: 1; }
+
 #tipo-escala, #tonica, #octava {
   padding: 4px 8px; border-radius: 4px; border: none; font-family: futura; 
   background-color: rgba(255,255,255,0.2); color: white; cursor: pointer;
@@ -1236,12 +1283,6 @@ onUnmounted(() => { if (relojTimer) clearInterval(relojTimer); if (intervaloCont
 }
 #btn-login:hover { background: darkgreen; }
 
-/* --- PANEL SUPERIOR (Usuario) --- */
-#panelSuperior {
-  /* Mantén tus estilos anteriores y añade flex-wrap para que se acomode bien */
-  flex-wrap: wrap;
-  justify-content: space-between;
-}
 #izq-superior {
   display: flex;
   flex-direction: column;
@@ -1317,4 +1358,30 @@ onUnmounted(() => { if (relojTimer) clearInterval(relojTimer); if (intervaloCont
   font-size: 14px;
 }
 .datos-informe strong { color: white; }
+
+/* --- MEDIA QUERY PARA MÓVIL --- */
+@media (max-width: 500px) {
+  #panelSuperior {
+    /* En móvil: Cambiamos a columna y lo centramos todo */
+    flex-direction: column; 
+    text-align: center;
+    gap: 6px;
+    padding: 8px 15px;
+  }
+
+  #datos-usuario-sup {
+    /* En móvil: Quitamos la alineación a la derecha, le ponemos una línea separadora arriba */
+    text-align: center; 
+    border-top: 1px solid rgba(255,255,255,0.3); 
+    padding-top: 6px;
+    font-size: 13px;
+    width: 100%;
+  }
+  
+  .cambiar-usuario {
+    display: block; /* Que el "Cambiar" baje a su propia línea si el nombre es largo */
+    margin-left: 0;
+    margin-top: 2px;
+  }
+}
 </style>
