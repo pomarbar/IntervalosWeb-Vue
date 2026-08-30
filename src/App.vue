@@ -1353,28 +1353,36 @@ onUnmounted(() => { if (relojTimer) clearInterval(relojTimer); if (intervaloCont
 @media (max-width: 500px) {
   
   #datos-usuario-sup {
-    /* 1. Desactivamos el absolute en móvil para que vuelva al flujo */
+    /* 1. Desactivamos el absolute */
     position: static; 
     transform: none;
-    /* 2. Lo separamos visualmente */
+    /* 2. Línea separadora sutil */
     border-top: 1px solid rgba(255,255,255,0.3); 
     padding-top: 6px;
     margin-top: 2px;
     width: 100%;
     box-sizing: border-box;
-    text-align: center;
     font-size: 13px;
+    
+    /* 3. LA MAGIA: Flexbox interno para mantenerlo en una sola línea */
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    gap: 8px; /* Espacio entre el nombre y el enlace */
   }
 
   .cambiar-usuario {
-    display: block; /* Pone el "Cambiar" debajo del nombre si hay poco espacio */
-    margin: 3px auto 0 auto;
+    /* Ya no necesita display: block, se queda en línea */
+    margin-left: 0;
+    text-decoration: underline;
+    cursor: pointer;
+    font-size: 11px;
+    opacity: 0.7;
   }
 
-  /* 3. LA SOLUCIÓN CLAVE: Empujamos todo el panel de ejercicios hacia abajo 
-        para que la cabecera más alta no lo tape */
+  /* 4. Ajuste milimétrico del margen para que no se pegue al título verde de abajo */
   #panelIzquierdo {
-    margin-top: 120px !important; /* Originalmente era 70px, 120px da espacio sobrado */
+    margin-top: 105px !important; /* Bajado de 120px a 105px porque la cabecera ahora es más compacta */
   }
 }
 </style>
