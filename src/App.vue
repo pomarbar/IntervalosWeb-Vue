@@ -21,29 +21,24 @@
 
         <!-- Panel Superior -->
     <div id="panelSuperior">
-      <!-- Contenedor izquierdo para PC, se centra en móvil -->
-      <div id="contenedor-izq">
-        <span id="titulo-app">Intervalos armónicos en:</span>
-        <div id="selector-tonalidad">
-          <select v-model="nombreTonicaActual" id="tonica">
-            <option v-for="tono in diccionarioTonos[tipoEscalaActual === 'mayor' ? 'Mayores' : 'Menores']" :key="tono.id" :value="tono.nombre">
-              {{ tono.nombre }}
-            </option>
-          </select>
-          <select v-model="tipoEscalaActual" id="tipo-escala">
-            <option value="mayor">Mayor</option>
-            <option value="menor armónica" disabled>Menor Armónica</option>
-          </select>
-        </div>
+      <span id="titulo-app">Intervalos armónicos en:</span>
+      <div id="selector-tonalidad">
+        <select v-model="nombreTonicaActual" id="tonica">
+          <option v-for="tono in diccionarioTonos[tipoEscalaActual === 'mayor' ? 'Mayores' : 'Menores']" :key="tono.id" :value="tono.nombre">
+            {{ tono.nombre }}
+          </option>
+        </select>
+        <select v-model="tipoEscalaActual" id="tipo-escala">
+          <option value="mayor">Mayor</option>
+          <option value="menor armónica" disabled>Menor Armónica</option>
+        </select>
       </div>
-
-      <!-- Datos del usuario -->
+      
       <div id="datos-usuario-sup">
         <span>Hola, <strong>{{ nombreUsuario }}</strong></span>
         <span class="cambiar-usuario" @click="cerrarSesion">Cambiar</span>
       </div>
     </div>
-
     <!-- Panel Izquierdo -->
     <div id="panelIzquierdo">
       <div id="selector">Intervalos simples armónicos</div>
@@ -923,32 +918,23 @@ onUnmounted(() => { if (relojTimer) clearInterval(relojTimer); if (intervaloCont
   max-width: 500px; margin: 70px auto 20px auto; background-color: rgb(230,252,230);
   padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); position: relative;
 }
-/* --- PANEL SUPERIOR (Responsive) --- */
+/* --- PANEL SUPERIOR (Comportamiento normal en PC) --- */
 #panelSuperior {
   position: fixed; 
   top: 0; left: 0; width: 100%; 
-  background-color: green; color: white; font-family: futura, sans-serif;
-  padding: 10px 20px; /* Padding horizontal para que no roce los bordes */
+  text-align: center; 
+  font-family: futura, sans-serif;
+  background-color: green; color: white; 
+  font-size: 20px; 
+  padding: 10px 0; 
   z-index: 10;
-  box-sizing: border-box;
-  
-  /* Por defecto (Computador): Fila horizontal */
   display: flex; 
-  flex-direction: row; 
-  justify-content: space-between; 
-  align-items: center;
+  flex-direction: column; 
+  align-items: center; 
+  gap: 8px; /* Esto centra todo perfectamente en PC */
 }
 
-#contenedor-izq {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-}
-
-#titulo-app {
-  font-size: 20px;
-}
+#titulo-app { font-size: 20px; }
 
 #selector-tonalidad {
   display: flex; 
@@ -957,11 +943,15 @@ onUnmounted(() => { if (relojTimer) clearInterval(relojTimer); if (intervaloCont
 }
 
 #datos-usuario-sup {
+  /* En PC usamos el absolute que te funcionaba antes */
+  position: absolute; 
+  right: 20px; 
+  top: 50%; 
+  transform: translateY(-50%);
   font-family: helvetica; 
   font-size: 14px; 
   color: white;
-  white-space: nowrap; /* Evita que el nombre corte y baje de línea en PC */
-  text-align: right;
+  white-space: nowrap;
 }
 
 .cambiar-usuario {
@@ -1361,27 +1351,30 @@ onUnmounted(() => { if (relojTimer) clearInterval(relojTimer); if (intervaloCont
 
 /* --- MEDIA QUERY PARA MÓVIL --- */
 @media (max-width: 500px) {
-  #panelSuperior {
-    /* En móvil: Cambiamos a columna y lo centramos todo */
-    flex-direction: column; 
-    text-align: center;
-    gap: 6px;
-    padding: 8px 15px;
-  }
-
+  
   #datos-usuario-sup {
-    /* En móvil: Quitamos la alineación a la derecha, le ponemos una línea separadora arriba */
-    text-align: center; 
+    /* 1. Desactivamos el absolute en móvil para que vuelva al flujo */
+    position: static; 
+    transform: none;
+    /* 2. Lo separamos visualmente */
     border-top: 1px solid rgba(255,255,255,0.3); 
     padding-top: 6px;
-    font-size: 13px;
-    width: 100%;
-  }
-  
-  .cambiar-usuario {
-    display: block; /* Que el "Cambiar" baje a su propia línea si el nombre es largo */
-    margin-left: 0;
     margin-top: 2px;
+    width: 100%;
+    box-sizing: border-box;
+    text-align: center;
+    font-size: 13px;
+  }
+
+  .cambiar-usuario {
+    display: block; /* Pone el "Cambiar" debajo del nombre si hay poco espacio */
+    margin: 3px auto 0 auto;
+  }
+
+  /* 3. LA SOLUCIÓN CLAVE: Empujamos todo el panel de ejercicios hacia abajo 
+        para que la cabecera más alta no lo tape */
+  #panelIzquierdo {
+    margin-top: 120px !important; /* Originalmente era 70px, 120px da espacio sobrado */
   }
 }
 </style>
