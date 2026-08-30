@@ -1141,6 +1141,7 @@ onUnmounted(() => { if (relojTimer) clearInterval(relojTimer); if (intervaloCont
   flex-direction: column;
   align-items: center;
   padding: 50px 15px 20px 15px;
+  overflow-y: auto;
   box-sizing: border-box;
 }
 
@@ -1162,6 +1163,7 @@ onUnmounted(() => { if (relojTimer) clearInterval(relojTimer); if (intervaloCont
   overflow-x: auto; /* Permite scroll horizontal solo si la pantalla es muy pequeña (ej. un móvil) */
   margin-bottom: 30px;
   -webkit-overflow-scrolling: touch;
+  flex-shrink: 0;
 }
 
 /* La Tabla Matricial 3x21 */
