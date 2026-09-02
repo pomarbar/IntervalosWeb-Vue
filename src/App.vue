@@ -286,7 +286,8 @@ const seleccionados = ref([])
 const respuestaTexto = ref('')
 const mostrarTextoI = ref(false)
 const mostrarCheck = ref(false)
-const checkmarkImg = ref('/grafs/acierto.png')
+// import.meta.env.BASE_URL lee automáticamente el '/intervalos/' de tu vite.config.js
+const checkmarkImg = ref(import.meta.env.BASE_URL + '/intervalos/grafs/acierto.png')
 const checkmarkScale = ref('scale(1.0)')
 const reloj = ref('')
 const textoInstruccion = ref('')
@@ -881,13 +882,13 @@ const evaluar = () => {
     }
     // OCULTAR EVALUACIÓN DIRECTA SI ESTAMOS EN TEST
     if (modo.value !== 'test') {
-      if (esCorrecto) { checkmarkImg.value = '/grafs/acierto.png'; checkmarkScale.value = 'scale(1.0)' }
-      else { checkmarkImg.value = '/grafs/error.png'; checkmarkScale.value = 'scale(0.7)' }
+      if (esCorrecto) { checkmarkImg.value = '/intervalos/grafs/acierto.png'; checkmarkScale.value = 'scale(1.0)' }
+      else { checkmarkImg.value = '/intervalos/grafs/error.png'; checkmarkScale.value = 'scale(0.7)' }
       mostrarCheck.value = true
     }
 
-    if (esCorrecto) { checkmarkImg.value = '/grafs/acierto.png'; checkmarkScale.value = 'scale(1.0)' }
-    else { checkmarkImg.value = '/grafs/error.png'; checkmarkScale.value = 'scale(0.7)' }
+    if (esCorrecto) { checkmarkImg.value = '/intervalos/grafs/acierto.png'; checkmarkScale.value = 'scale(1.0)' }
+    else { checkmarkImg.value = '/intervalos/grafs/error.png'; checkmarkScale.value = 'scale(0.7)' }
     mostrarCheck.value = true
   }, 50)
 }
