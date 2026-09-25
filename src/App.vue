@@ -192,6 +192,29 @@
 
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 
+// --- NUEVO: CONFIGURACIÓN DEL SERVIDOR ---
+const API_URL = 'http://localhost:8000/guardar' // Apunta al servidor Node
+const testSessionId = ref('') 
+
+// Función que envía la respuesta al servidor de forma invisible ( asíncrona)
+const enviarRespuestaAlServidor = async (preguntaNum, intervaloSonado, respuestaUsuario) => {
+  try {
+    await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        usuario: nombreUsuario.value,
+        sessionId: testSessionId.value,
+        pregunta: preguntaNum,
+        sonado: intervaloSonado,
+        respondido: respuestaUsuario
+      })
+    })
+  } catch (error) {
+    console.error('Error al guardar en el servidor:', error)
+  }
+}
+
 // ==================== ESTADO DEL USUARIO ====================
 const nombreUsuario = ref('')
 const mostrarLogin = ref(true)
@@ -790,6 +813,8 @@ const jugar = () => {
     currentTestAnswered = false
     respuestaTexto.value = ''
     jugando.value = true
+    // ---> AÑADE ESTA LÍNEA AQUÍ <---
+    testSessionId.value = Date.now().toString() 
     jugarContinuum()
   }
 }
@@ -804,6 +829,11 @@ const jugarContinuum = () => {
     if (modo.value === 'test') {
       // 1. Si ya pasamos el primero y NO respondió, registramos fallo
       if (testCount.value > 0 && !currentTestAnswered) {
+        
+        // ---> NUEVO: ENVIAR EL "TA" AL SERVIDOR <---
+        // Avisamos al servidor que el usuario no respondió a tiempo
+        enviarRespuestaAlServidor(testCount.value, datosInterv.value.nombre, 'TA')
+
         testResults.value.push({
           played: datosInterv.value.nombre,
           answered: 'TA',
@@ -861,7 +891,7 @@ const evaluar = () => {
     }
 
     catRespuestaTemp = null 
-       // --- GUARDAR O REEMPLAZAR RESPUESTA EN MODO TEST ---
+        // --- GUARDAR O REEMPLAZAR RESPUESTA EN MODO TEST ---
     if (modo.value === 'test') {
       const nuevaRespuesta = {
         played: datosInterv.value.nombre,
@@ -869,13 +899,13 @@ const evaluar = () => {
         isCorrect: esCorrecto
       }
 
+      // ---> NUEVO: ENVIAR INMEDIATAMENTE AL SERVIDOR <---
+      // El servidor guarda la verdad. Si el usuario cambia la variable después, ya es tarde.
+      enviarRespuestaAlServidor(testCount.value, datosInterv.value.nombre, respuestaTexto.value)
+
       if (currentTestAnswered) {
-        // Si YA había respondido antes a este mismo ejercicio, 
-        // REEMPLAZAMOS la última entrada del array en lugar de crear una nueva.
-        // Usamos splice para asegurar que Vue detecte el cambio en el v-for de la barra inferior.
         testResults.value.splice(testResults.value.length - 1, 1, nuevaRespuesta)
       } else {
-        // Si es la primera vez que responde a este ejercicio, lo agregamos normal
         currentTestAnswered = true
         testResults.value.push(nuevaRespuesta)
       }

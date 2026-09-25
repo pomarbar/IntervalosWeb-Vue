@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Visor Profesor - Intervalos</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #121212; color: #e0e0e0; margin: 0; padding: 20px; }
+    #login-box, #dashboard { max-width: 900px; margin: 50px auto; background: #1e1e1e; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+    h2 { color: #4caf50; margin-top: 0; }
+    input[type="password"] { width: 100%; padding: 12px; font-size: 16px; border: 1px solid #444; background: #333; color: white; border-radius: 6px; box-sizing: border-box; margin-bottom: 15px; }
+    button { background: #4caf50; color: white; border: none; padding: 12px 24px; font-size: 16px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+    button:hover { background: #388e3c; }
+        #filtro-container { 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center; 
+      max-width: 900px; 
+      margin: 0 auto 30px auto; 
+      padding: 15px 25px; 
+      background: #2a2a2a; 
+      border-radius: 8px; 
+      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    }
+    
+    #controls-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 20px; /* Espacio entre cada grupo de control */
+    }
+
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 8px; /* Espacio entre la label y el select */
+    }
+
+    #filtro-container label { 
+      font-size: 13px; 
+      color: #aaa; 
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+    
+    #filtro-container select { 
+      padding: 8px 12px; 
+      font-size: 14px; 
+      border-radius: 6px; 
+      background: #444; 
+      color: white; 
+      border: 1px solid #666; 
+      cursor: pointer;
+    }
+    
+    #filtro-container select:hover {
+      border-color: #4caf50;
+    }
+
+    #btn-refrescar { 
+      background: #333; 
+      color: white; 
+      border: 1px solid #555; 
+      padding: 8px 15px; 
+      font-size: 14px;
+      border-radius: 6px; 
+      cursor: pointer; 
+      font-weight: bold;
+      transition: 0.2s;
+    }
+    
+    #btn-refrescar:hover { 
+      background: #444; 
+      border-color: #4caf50;
+    }
+    .error-msg { color: #f44336; font-weight: bold; margin-top: 10px; }
+    
+    .tarjeta-estudiante { background: #252525; border-radius: 8px; padding: 20px; margin-bottom: 25px; border: 1px solid #333; }
+    .tarjeta-cabecera { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 2px solid #4caf50; padding-bottom: 10px; }
+    .tarjeta-nombre { font-size: 24px; font-weight: bold; }
+    .tarjeta-puntos { font-size: 28px; font-weight: bold; color: #4caf50; }
+    .tarjeta-meta { font-size: 12px; color: #888; margin-top: 4px; }
+
+    table { width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #444; padding: 10px 2px; text-align: center; font-size: 14px; white-space: nowrap; }
+    th { color: #aaa; font-size: 12px; }
+    .celda-etiqueta { background: #333; font-weight: bold; color: #ccc; width: 40px; }
+    .app-color { color: #64b5f6 !important; }
+    .verde { color: #4caf50; font-weight: bold; }
+    .rojo { color: #f44336; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+  <!-- PANTALLA DE LOGIN -->
+  <div id="login-box">
+    <h2>🔒 Acceso Profesor</h2>
+    <p>Ingrese su clave para ver los resultados:</p>
+    <input type="password" id="input-clave" placeholder="Clave secreta" autofocus>
+    <button onclick="iniciarSesion()">ENTRAR</button>
+    <div id="login-error" class="error-msg" style="display:none;">Clave incorrecta. Intente de nuevo.</div>
+  </div>
+
+  <!-- PANTALLA DEL VISOR -->
+  <div id="dashboard" style="display:none;">
+       <div id="filtro-container">
+      <h2>📊 Resultados en Vivo</h2>
+      
+      <div id="controls-wrapper">
+        <div class="control-group">
+          <label for="filtro-archivo">Archivo:</label>
+          <select id="filtro-archivo" onchange="cargarDatos()">
+            <option value="resultados_intervalos.csv">Actual (En vivo)</option>
+          </select>
+        </div>
+        
+        <div class="control-group">
+          <label for="filtro-nombre">Alumno:</label>
+          <select id="filtro-nombre" onchange="renderizarTablas()">
+            <option>Todos</option>
+          </select>
+        </div>
+        
+        <button onclick="cargarDatos()" id="btn-refrescar">🔄 Refrescar</button>
+      </div>
+    </div>
+    <div id="contenedor-tarjetas"></div>
+  </div>
+
+  <script>
+    const API_URL = 'http://localhost:8000/resultados';
+    let datosCrudos = [];
+    let claveProfesor = '';
+
+    function iniciarSesion() {
+      claveProfesor = document.getElementById('input-clave').value;
+      document.getElementById('login-error').style.display = 'none';
+      cargarDatos();
+    }
+
+    async function cargarHistorial() {
+      try {
+        const response = await fetch('http://localhost:8000/historial', {
+          headers: { 'x-teacher-password': claveProfesor }
+        });
+        if (response.ok) {
+          const archivos = await response.json();
+          const select = document.getElementById('filtro-archivo');
+          // Mantener siempre la opción "Actual"
+          select.innerHTML = '<option value="resultados_intervalos.csv">Actual (En vivo)</option>';
+          archivos.forEach(nombre => {
+            if (nombre !== 'resultados_intervalos.csv') { // No duplicar el actual
+              const opt = document.createElement('option');
+              opt.value = nombre;
+              opt.innerText = `📦 ${nombre.replace('resultados_', '').replace('.csv', '')}`;
+              select.appendChild(opt);
+            }
+          });
+        }
+      } catch(e) {}
+    }
+
+    async function cargarDatos() {
+      const archivoSeleccionado = document.getElementById('filtro-archivo').value;
+      try {
+        const response = await fetch(`http://localhost:8000/resultados?file=${archivoSeleccionado}`, {
+          headers: { 'x-teacher-password': claveProfesor }
+        });
+        
+        if (response.status === 403) {
+          document.getElementById('login-error').style.display = 'block';
+          return;
+        }
+
+        datosCrudos = await response.json();
+        document.getElementById('login-box').style.display = 'none';
+        document.getElementById('dashboard').style.display = 'block';
+        
+        await cargarHistorial(); // Actualizar la lista de archivos
+        actualizarFiltros();
+        renderizarTablas();
+      } catch (error) {
+        console.error('Error de conexión:', error);
+        alert('No se pudo conectar al servidor.');
+      }
+    }
+
+    function actualizarFiltros() {
+      const select = document.getElementById('filtro-nombre');
+      const nombres = new Set(datosCrudos.map(r => r.usuario));
+      select.innerHTML = '<option>Todos</option>';
+      nombres.forEach(n => {
+        const opt = document.createElement('option');
+        opt.value = n; opt.innerText = n;
+        select.appendChild(opt);
+      });
+    }
+
+    function renderizarTablas() {
+      const filtro = document.getElementById('filtro-nombre').value;
+      const contenedor = document.getElementById('contenedor-tarjetas');
+      contenedor.innerHTML = '';
+
+      // Agrupar datos
+      const grupos = {};
+      datosCrudos.forEach(r => {
+        if (filtro !== 'Todos' && r.usuario !== filtro) return;
+        const key = `${r.usuario}_${r.sessionId}`;
+        if (!grupos[key]) {
+          grupos[key] = { nombre: r.usuario, sessionId: r.sessionId, preguntas: [], correctas: 0, fecha: r.timestamp };
+        }
+        // Usamos el veredicto del servidor, no evaluamos aquí
+        if (r.veredicto === 'Correcto') grupos[key].correctas++;
+        grupos[key].preguntas.push({ num: r.pregunta, sonado: r.sonado, respondido: r.respondido, veredicto: r.veredicto });
+      });
+
+      const arrayGrupos = Object.values(grupos).reverse();
+
+      if (arrayGrupos.length === 0) {
+        contenedor.innerHTML = '<p style="text-align:center; color:#888;">No hay datos para este filtro.</p>';
+        return;
+      }
+
+      arrayGrupos.forEach(grupo => {
+        const tarjeta = document.createElement('div');
+        tarjeta.className = 'tarjeta-estudiante';
+        
+        let tablaHTML = `<table><thead><tr><th class="celda-etiqueta">#</th>`;
+        grupo.preguntas.forEach(p => tablaHTML += `<th>${p.num}</th>`);
+        tablaHTML += `</tr></thead><tbody><tr><td class="celda-etiqueta">App</td>`;
+        grupo.preguntas.forEach(p => tablaHTML += `<td class="app-color">${p.sonado}</td>`);
+        tablaHTML += `</tr><tr><td class="celda-etiqueta">Tú</td>`;
+        // Pintamos según el veredicto del servidor
+        grupo.preguntas.forEach(p => tablaHTML += `<td class="${p.veredicto === 'Correcto' ? 'verde' : 'rojo'}">${p.respondido}</td>`);
+        tablaHTML += `</tr></tbody></table>`;
+
+        tarjeta.innerHTML = `
+          <div class="tarjeta-cabecera">
+            <div>
+              <div class="tarjeta-nombre">${grupo.nombre}</div>
+              <div class="tarjeta-meta">Sesión: ${new Date(parseInt(grupo.sessionId)).toLocaleString('es-AR')}</div>
+            </div>
+            <div class="tarjeta-puntos">${grupo.correctas} / ${grupo.preguntas.length}</div>
+          </div>
+          ${tablaHTML}
+        `;
+        contenedor.appendChild(tarjeta);
+      });
+    }
+  </script>
+</body>
+</html>
